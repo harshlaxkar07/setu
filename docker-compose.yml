@@ -1,0 +1,74 @@
+# Setu — one command runs the whole demo environment (ADR-008).
+# db healthcheck gates backend and dashboard startup.
+
+services:
+  db:
+    # postgis/postgis base + the pgvector package (db/Dockerfile) — one database,
+    # both extensions, enabled by db/init/01-extensions.sql (design D3, ADR-004).
+    build: ./db
+    environment:
+      POSTGRES_USER: setu
+      POSTGRES_PASSWORD: setu_local_dev
+      POSTGRES_DB: setu
+    ports:
+      # Host 5434: 5432/5433 commonly collide with local Postgres instances.
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Init scripts run once on a fresh volume: extensions, then the schema contract.
+      # Individual file mounts — nesting a file mount inside an ro dir mount fails.
+      - ./db/init/01-extensions.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U setu -d setu"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://setu:setu_local_dev@db:5432/setu
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEMO_REPLAY: ${DEMO_REPLAY:-0}
+      WHISPER_MODEL_DIR: /models
+      MEDIA_DIR: /media
+      CITIZEN_WEB_DIR: /app/citizen-web
+    volumes:
+      # Dev bind-mount: host source is live in the container (restart to reload;
+      # `docker compose exec backend pytest` always sees current code).
+      - ./backend:/app
+      # Static citizen chat page lives at the repo root, outside the build context.
+      - ./citizen-web:/app/citizen-web:ro
+      # One-time Whisper model download persists across container recreation.
+      - whisper-models:/models
+      # Raw citizen audio / verification media — kept out of the image and repo.
+      - media:/media
+      # Recorded Gemini/Nominatim fixtures for DEMO_REPLAY (committed separately).
+      - ./backend/fixtures:/app/fixtures
+      # Seed scripts + verified locations (run: docker compose exec backend python /app/seed/seed.py)
+      - ./db/seed:/app/seed
+    depends_on:
+      db:
+        condition: service_healthy
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      # The dashboard talks to the backend API only — deliberately NO database
+      # credentials here, so the Publish Gate cannot be bypassed by a direct query.
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
+volumes:
+  pgdata:
+  whisper-models:
+  media:
