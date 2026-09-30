@@ -172,15 +172,17 @@ def get_cluster(cluster_id: str) -> dict[str, Any]:
         # Raw citizen voices — rendered WITHOUT the AI-drafted marker, in
         # Devanagari where Hindi (policymaker-dashboard provenance scenarios).
         payload["sample_requests"] = [
-            {"raw_text": r["raw_text"], "detected_language": r["detected_language"]}
+            {"raw_text": r["raw_text"], "detected_language": r["detected_language"],
+             "channel": r["channel"], "households": r["households_represented"]}
             for r in cur.execute(
-                """SELECT cr.raw_text, sr.detected_language
+                """SELECT cr.raw_text, sr.detected_language, cr.channel::text AS channel,
+                          cr.households_represented
                    FROM cluster_memberships cm
                    JOIN geocoded_requests gr ON gr.id = cm.geocoded_request_id
                    JOIN structured_requests sr ON sr.id = gr.structured_request_id
                    JOIN citizen_requests cr ON cr.id = sr.citizen_request_id
                    WHERE cm.demand_cluster_id = %s AND cr.raw_text IS NOT NULL
-                   ORDER BY cr.submitted_at LIMIT 3""",
+                   ORDER BY (cr.channel = 'assisted') DESC, cr.submitted_at LIMIT 3""",
                 (cluster_id,),
             ).fetchall()
         ]

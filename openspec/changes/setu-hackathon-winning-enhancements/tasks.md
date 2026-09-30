@@ -38,9 +38,9 @@
 
 - [x] 6.1 Implement `GET /api/requests/{id}/timeline` and `needs_location` in status (D11, D8); verify tests covering a request grouped with others awaiting review, and a published then resolved request
 - [x] 6.2 Implement `POST /api/requests/{id}/location` and the relocate routine (D8); verify an integration test that moves a flagged request into the Velhe cluster in one transaction with correct member counts on both clusters and re-scored categories
-- [ ] 6.3 Citizen UI: status timeline under each receipt, follow-up location question, and read-aloud buttons with speechSynthesis (hidden when unsupported); verify in a browser at 390px and 1440px that the timeline advances after a dashboard approval and no network request carries read-aloud text
-- [ ] 6.4 Citizen UI i18n dictionary (hi/en/mr) with header switch persisted in localStorage; verify every visible string switches to Marathi and persists on reload
-- [ ] 6.5 Assisted mode: migration for `channel='assisted'`, `households_represented`, unique `idempotency_key`; `/citizen/?mode=assisted` UI with offline queue and visible count; verify a browser test that 4 requests captured offline submit exactly once when back online and a replayed flush returns the existing request ids
+- [x] 6.3 Citizen UI: status timeline under each receipt, follow-up location question, and read-aloud buttons with speechSynthesis (hidden when unsupported); verify in a browser at 390px and 1440px that the timeline advances after a dashboard approval and no network request carries read-aloud text
+- [x] 6.4 Citizen UI i18n dictionary (hi/en/mr) with header switch persisted in localStorage; verify every visible string switches to Marathi and persists on reload
+- [x] 6.5 Assisted mode: migration for `channel='assisted'`, `households_represented`, unique `idempotency_key`; `/citizen/?mode=assisted` UI with offline queue and visible count; verify a browser test that 4 requests captured offline submit exactly once when back online and a replayed flush returns the existing request ids
 
 ## 7. Policy briefs
 

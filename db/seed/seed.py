@@ -316,9 +316,9 @@ def main() -> int:
             at = r.get("at") or arrival_time()
             cur.execute(
                 """INSERT INTO citizen_requests
-                     (channel, raw_text, submitter_ref, created_at)
-                   VALUES ('text', %s, %s, %s) RETURNING id""",
-                (r["text"], r["submitter"], at),
+                     (channel, raw_text, submitter_ref, submitted_at, created_at)
+                   VALUES ('text', %s, %s, %s, %s) RETURNING id""",
+                (r["text"], r["submitter"], at, at),
             )
             cr_id = cur.fetchone()[0]
             cur.execute(
@@ -457,9 +457,10 @@ def seed_resolved_example(conn) -> None:
     ).fetchone()
     for i, (text, at) in enumerate(zip(texts, arrivals)):
         (cr,) = conn.execute(
-            """INSERT INTO citizen_requests (channel, raw_text, submitter_ref, created_at)
-               VALUES ('text', %s, %s, %s) RETURNING id""",
-            (text, f"seed-sanit-paud-{i:04d}", at)).fetchone()
+            """INSERT INTO citizen_requests
+                 (channel, raw_text, submitter_ref, submitted_at, created_at)
+               VALUES ('text', %s, %s, %s, %s) RETURNING id""",
+            (text, f"seed-sanit-paud-{i:04d}", at, at)).fetchone()
         (sr,) = conn.execute(
             """INSERT INTO structured_requests (citizen_request_id, category, urgency,
                    summary, detected_language, raw_location_mention)
@@ -578,9 +579,9 @@ def seed_enhancement_regions(cur, ds_pop, ds_fac) -> None:
             at = r.get("at") or arrival_time()
             cur.execute(
                 """INSERT INTO citizen_requests
-                     (channel, raw_text, submitter_ref, created_at)
-                   VALUES ('text', %s, %s, %s) RETURNING id""",
-                (r["text"], r["submitter"], at),
+                     (channel, raw_text, submitter_ref, submitted_at, created_at)
+                   VALUES ('text', %s, %s, %s, %s) RETURNING id""",
+                (r["text"], r["submitter"], at, at),
             )
             cr_id = cur.fetchone()[0]
             cur.execute(

@@ -272,7 +272,8 @@ def run(conn: psycopg.Connection, structured_request_id: str, *,
     embedder = _embedder or _live_embedder
 
     row = conn.execute(
-        """SELECT sr.raw_location_mention, sr.summary, cr.raw_text, t.text
+        """SELECT sr.raw_location_mention, sr.summary, cr.raw_text, t.text,
+                  cr.assisted_village
            FROM structured_requests sr
            JOIN citizen_requests cr ON cr.id = sr.citizen_request_id
            LEFT JOIN transcriptions t ON t.citizen_request_id = cr.id
@@ -282,7 +283,11 @@ def run(conn: psycopg.Connection, structured_request_id: str, *,
     ).fetchone()
     if row is None:
         raise ValueError(f"unknown structured_request {structured_request_id}")
-    mention, summary, raw_text, transcription = row
+    mention, summary, raw_text, transcription, village = row
+    # Assisted reports (enhancements D11): the field worker's village is the
+    # location when the message itself names none.
+    if not (mention or "").strip() and village:
+        mention = village
 
     # -- geocode -------------------------------------------------------------
     lon = lat = None
