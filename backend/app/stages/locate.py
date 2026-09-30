@@ -27,7 +27,7 @@ import time
 
 import psycopg
 
-from app.constants import EMBEDDING_DIM, EMBEDDING_MODEL
+from app.constants import EMBEDDING_DIM
 from app.gemini import FIXTURE_DIR, _replay_enabled
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
@@ -124,15 +124,9 @@ def _embed_cache_path(text: str):
 
 
 def _live_embedder(text: str) -> list[float]:
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
-    from app.constants import EMBEDDING_DIM
-
-    # gemini-embedding-001 defaults to 3072 dims; the schema column and every
-    # cached/seeded vector are 768 (constants.EMBEDDING_DIM).
-    return GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL).embed_query(
-        text, output_dimensionality=EMBEDDING_DIM,
-    )
+    # Through the configured provider (PII-masked, dimension-checked).
+    from app import llm
+    return llm.embed(text)
 
 
 def _embedding_for(text: str, embedder) -> list[float] | None:

@@ -1,10 +1,10 @@
 ## 1. Foundations
 
-- [ ] 1.1 Add the migration runner (D1): `db/migrations/` applied in order at backend startup, recorded in `schema_migrations`; verify by restarting the backend twice on the existing volume and confirming each migration is recorded once and startup logs no errors
-- [ ] 1.2 Add dashboard source bind mount in `docker-compose.yml` (D10) and verify a CSS edit in `dashboard/tokens.py` appears after `docker compose restart dashboard` without a rebuild
-- [ ] 1.3 Introduce `backend/app/llm/` with the `Provider` protocol, `GeminiProvider` wrapping the existing live call, and `call_gemini` as an alias (D16); verify the full existing test suite passes unchanged and committed fixtures still replay with `DEMO_REPLAY=1`
-- [ ] 1.4 Add `OpenAICompatProvider` (chat completions JSON mode + embeddings via httpx), env selection, provider/model/latency/token fields in trace entries, and the startup embedding-dimension check; verify with unit tests using a mocked HTTP transport, including the dimension-mismatch refusal
-- [ ] 1.5 Implement `pii.mask` (D13) and call it inside the provider layer for every prompt; verify unit tests for Indian mobile numbers (with/without +91), spaced/unspaced 12-digit numbers, emails, and "मेरा नाम / my name is" cues, and an integration test showing the trace stores masked text
+- [x] 1.1 Add the migration runner (D1): `db/migrations/` applied in order at backend startup, recorded in `schema_migrations`; verify by restarting the backend twice on the existing volume and confirming each migration is recorded once and startup logs no errors
+- [x] 1.2 Add dashboard source bind mount in `docker-compose.yml` (D10) and verify a CSS edit in `dashboard/tokens.py` appears after `docker compose restart dashboard` without a rebuild
+- [x] 1.3 Introduce `backend/app/llm/` with the `Provider` protocol, `GeminiProvider` wrapping the existing live call, and `call_gemini` as an alias (D16); verify the full existing test suite passes unchanged and committed fixtures still replay with `DEMO_REPLAY=1`
+- [x] 1.4 Add `OpenAICompatProvider` (chat completions JSON mode + embeddings via httpx), env selection, provider/model/latency/token fields in trace entries, and the startup embedding-dimension check; verify with unit tests using a mocked HTTP transport, including the dimension-mismatch refusal
+- [x] 1.5 Implement `pii.mask` (D13) and call it inside the provider layer for every prompt; verify unit tests for Indian mobile numbers (with/without +91), spaced/unspaced 12-digit numbers, emails, and "मेरा नाम / my name is" cues, and an integration test showing the trace stores masked text
 
 ## 2. Multi-category data and language
 

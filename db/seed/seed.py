@@ -34,7 +34,6 @@ sys.path.insert(0, "/app")  # backend container: app package + mounted seed dir
 from app.constants import (  # noqa: E402
     CATEGORY_WATER,
     EMBEDDING_DIM,
-    EMBEDDING_MODEL,
     SERVICE_RADIUS_M,
 )
 
@@ -105,19 +104,18 @@ def embed_texts(texts: list[str]) -> dict[str, list[float]] | None:
     keyed = {hashlib.sha256(t.encode()).hexdigest(): t for t in texts}
     misses = [t for k, t in keyed.items() if k not in cache]
     if misses:
-        if not os.environ.get("GEMINI_API_KEY"):
+        if (os.environ.get("LLM_PROVIDER") or "gemini") == "gemini" and \
+                not os.environ.get("GEMINI_API_KEY"):
             print(f"!! {len(misses)} embeddings needed but GEMINI_API_KEY is unset.")
             return None
-        from langchain_google_genai import GoogleGenerativeAIEmbeddings
-        client = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL)
-        print(f"Embedding {len(misses)} new texts via {EMBEDDING_MODEL} ...")
-        # embed_documents batches internally; free-tier-friendly chunks.
+        from app import llm  # configured provider (enhancements design D16)
+        provider = llm.get_provider()
+        print(f"Embedding {len(misses)} new texts via "
+              f"{provider.name}/{provider.embed_model} ...")
+        # Free-tier-friendly chunks.
         for start in range(0, len(misses), 50):
             chunk = misses[start:start + 50]
-            # gemini-embedding-001 defaults to 3072 dims; the schema column
-            # is vector(768), so request the reduced dimensionality.
-            vecs = client.embed_documents(chunk,
-                                          output_dimensionality=EMBEDDING_DIM)
+            vecs = llm.embed_many(chunk)
             for t, vec in zip(chunk, vecs):
                 assert len(vec) == EMBEDDING_DIM
                 cache[hashlib.sha256(t.encode()).hexdigest()] = vec

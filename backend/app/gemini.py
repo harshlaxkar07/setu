@@ -1,6 +1,8 @@
-"""Shared Gemini client: schema-bound calls, retry-once posture, DEMO_REPLAY.
+"""Shared LLM entry point: schema-bound calls, retry-once posture, DEMO_REPLAY.
 
-Every LLM call in the pipeline goes through `call_gemini` (design D5):
+Every LLM call in the pipeline goes through `call_gemini` (design D5). The name
+is historical: the call is served by whichever provider `app.llm` is configured
+for (enhancements design D16) — Gemini by default:
 
 - **Schema-bound**: pass a Pydantic model as `schema` and the call returns a
   validated instance; malformed output raises (the stage contract fails rather
@@ -12,9 +14,11 @@ Every LLM call in the pipeline goes through `call_gemini` (design D5):
   successful response is recorded, so rehearsing once builds the demo fixtures.
   Pipeline logic is identical in both modes — this wrapper is the only switch.
 """
+import contextvars
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, Type
 
@@ -27,6 +31,15 @@ FIXTURE_DIR = Path(os.environ.get("FIXTURE_DIR", "/app/fixtures"))
 
 class GeminiUnavailable(Exception):
     """Raised after the single retry also fails — run halts as needs-retry."""
+
+
+# Provider-neutral alias; existing callers keep catching GeminiUnavailable.
+LLMUnavailable = GeminiUnavailable
+
+# Token usage of the most recent live Gemini call in this context (read by the
+# Gemini provider so the RunTrace can show it).
+_last_usage: contextvars.ContextVar[dict] = contextvars.ContextVar(
+    "setu_gemini_usage", default={})
 
 
 def _fixture_key(stage: str, prompt: str) -> str:
@@ -74,6 +87,9 @@ def _live_call(prompt: str, image_bytes: bytes | None) -> str:
         msg = llm.invoke([HumanMessage(content=content)])
     else:
         msg = llm.invoke(prompt)
+    usage = getattr(msg, "usage_metadata", None) or {}
+    _last_usage.set({"input_tokens": usage.get("input_tokens"),
+                     "output_tokens": usage.get("output_tokens")})
     return _content_text(msg.content)
 
 
@@ -107,29 +123,54 @@ def call_gemini(
     """One pipeline LLM call. Returns `schema`-validated instance or raw text.
 
     `_caller` swaps the live-call function in tests (mock injection point).
+    Citizen text is PII-masked before it can reach any provider or fixture
+    (enhancements design D13).
     """
-    live = _caller or _live_call
+    from app import llm, pii
 
+    provider = llm.get_provider()
+    prompt, pii_counts = pii.mask(prompt)
+
+    def live(p: str, img: bytes | None):
+        if _caller is not None:
+            return _caller(p, img), None, None
+        done = provider.complete(p, img, json_mode=schema is not None)
+        return done.text, done.input_tokens, done.output_tokens
+
+    # Fixture keys stay (stage, prompt) for Gemini so committed demo fixtures
+    # keep replaying; other providers get their own namespace.
+    fixture_stage = stage if provider.name == "gemini" else \
+        f"{stage}@{provider.name}/{provider.model}"
     # Fixture store first when replaying. Image calls key on prompt + image hash.
     fixture_prompt = prompt
     if image_bytes is not None:
         fixture_prompt = f"{prompt}\x00img:{hashlib.sha256(image_bytes).hexdigest()}"
+    meta = {"stage": stage, "provider": provider.name, "model": provider.model,
+            "pii_masked": pii_counts, "masked_prompt": prompt}
     if _replay_enabled():
-        hit = _lookup_fixture(stage, fixture_prompt)
+        hit = _lookup_fixture(fixture_stage, fixture_prompt)
         if hit is not None:
+            llm.record_call({**meta, "replayed": True, "latency_ms": 0.0})
             return _validate(hit, schema)
 
     last_err: Exception | None = None
     for attempt in (1, 2):  # exactly one retry (orchestration spec)
+        start = time.monotonic()
         try:
-            raw = live(prompt, image_bytes)
-            _record_fixture(stage, fixture_prompt, raw)
+            raw, tokens_in, tokens_out = live(prompt, image_bytes)
+            llm.record_call({
+                **meta, "replayed": False, "attempt": attempt,
+                "latency_ms": round((time.monotonic() - start) * 1000, 1),
+                "input_tokens": tokens_in, "output_tokens": tokens_out,
+            })
+            _record_fixture(fixture_stage, fixture_prompt, raw)
             return _validate(raw, schema)
         except _ValidationFailed:
             raise  # malformed output is a contract failure, not a transient error
         except Exception as exc:  # API error / rate limit — retry once
             last_err = exc
-    raise GeminiUnavailable(f"{stage}: Gemini failed twice: {last_err}") from last_err
+    raise GeminiUnavailable(
+        f"{stage}: {provider.name} failed twice: {last_err}") from last_err
 
 
 class _ValidationFailed(Exception):

@@ -11,11 +11,21 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app import db
+from app import db, migrations
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Schema changes after the MVP base schema (enhancements design D1).
+    applied = migrations.apply_all()
+    if applied:
+        print(f"Applied migrations: {', '.join(applied)}", flush=True)
+    # A provider whose vectors do not fit vector(768) must never write them
+    # (llm-provider-abstraction spec); embeds also re-check on every call.
+    from app import llm
+    embed_problem = llm.check_embedding_dimension()
+    if embed_problem:
+        print(f"ERROR: clustering disabled — {embed_problem}", flush=True)
     db.pool.open()
     # Checkpointer tables live in the same database (design D2/D3, task 1.8).
     db.setup_checkpointer()
