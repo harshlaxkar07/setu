@@ -1,0 +1,324 @@
+{
+  "clusters": [
+    {
+      "id": "bd0f2240-f9d9-419a-80cc-06eb0c84381b",
+      "category": "water_infrastructure",
+      "member_count": 20,
+      "status": "active",
+      "confidence": "high",
+      "confidence_reason": null,
+      "representative_summary": "Drinking water supply inadequate or absent in Velhe for weeks",
+      "lat": 18.3036029,
+      "lon": 73.5824636,
+      "score": 0.8,
+      "tier": "High",
+      "components": {
+        "gap_norm": 1.0,
+        "investment_deficit_norm": 1.0,
+        "volume_norm": 0.0,
+        "weights": {
+          "gap": 0.5,
+          "volume": 0.2,
+          "investment_deficit": 0.3
+        }
+      },
+      "gap": {
+        "population": 4800,
+        "facility_count": 0,
+        "gap_value": 35000.0,
+        "dataset_citations": [
+          {
+            "role": "population+investment",
+            "region": "Velhe",
+            "dataset_id": "6260512d-8313-49b6-9412-4da7ce09f277",
+            "region_profile_id": "439f3f25-2900-4a75-9551-d8198a3ccb30"
+          },
+          {
+            "role": "facilities",
+            "radius_m": 2000,
+            "dataset_id": "c4ecd70d-6e56-4902-bf5e-e6630f86d6cb",
+            "facility_type": "water_point"
+          }
+        ]
+      }
+    },
+    {
+      "id": "f6267b6a-7eb7-40d3-88bb-a2391713c151",
+      "category": "water_infrastructure",
+      "member_count": 500,
+      "status": "active",
+      "confidence": "high",
+      "confidence_reason": null,
+      "representative_summary": "Drinking water supply inadequate or absent in Kothrud for weeks",
+      "lat": 18.5072618,
+      "lon": 73.8056676,
+      "score": 0.2,
+      "tier": "Low",
+      "components": {
+        "gap_norm": 0.0,
+        "investment_deficit_norm": 0.0,
+        "volume_norm": 1.0,
+        "weights": {
+          "gap": 0.5,
+          "volume": 0.2,
+          "investment_deficit": 0.3
+        }
+      },
+      "gap": {
+        "population": 175000,
+        "facility_count": 10,
+        "gap_value": 17500.0,
+        "dataset_citations": [
+          {
+            "role": "population+investment",
+            "region": "Kothrud",
+            "dataset_id": "6260512d-8313-49b6-9412-4da7ce09f277",
+            "region_profile_id": "b891fca1-414e-44a2-8ee5-f24ceebb228d"
+          },
+          {
+            "role": "facilities",
+            "radius_m": 2000,
+            "dataset_id": "c4ecd70d-6e56-4902-bf5e-e6630f86d6cb",
+            "facility_type": "water_point"
+          }
+        ]
+      }
+    }
+  ],
+  "recommendations_pending": [],
+  "recommendations_published": [],
+  "cluster_bd0f2240-f9d9-419a-80cc-06eb0c84381b": {
+    "id": "bd0f2240-f9d9-419a-80cc-06eb0c84381b",
+    "category": "water_infrastructure",
+    "member_count": 20,
+    "status": "active",
+    "confidence": "high",
+    "confidence_reason": null,
+    "representative_summary": "Drinking water supply inadequate or absent in Velhe for weeks",
+    "lat": 18.3036029,
+    "lon": 73.5824636,
+    "score": 0.8,
+    "tier": "High",
+    "components": {
+      "gap_norm": 1.0,
+      "investment_deficit_norm": 1.0,
+      "volume_norm": 0.0,
+      "weights": {
+        "gap": 0.5,
+        "volume": 0.2,
+        "investment_deficit": 0.3
+      }
+    },
+    "gap": {
+      "population": 4800,
+      "facility_count": 0,
+      "gap_value": 35000.0,
+      "dataset_citations": [
+        {
+          "role": "population+investment",
+          "region": "Velhe",
+          "dataset_id": "6260512d-8313-49b6-9412-4da7ce09f277",
+          "region_profile_id": "439f3f25-2900-4a75-9551-d8198a3ccb30"
+        },
+        {
+          "role": "facilities",
+          "radius_m": 2000,
+          "dataset_id": "c4ecd70d-6e56-4902-bf5e-e6630f86d6cb",
+          "facility_type": "water_point"
+        }
+      ]
+    },
+    "indicators": [
+      {
+        "id": "4a4e4236-bc25-46ba-955b-5a6545bc15b2",
+        "name": "possible under-representation signal",
+        "value_text": "low digital-reporting volume (20 requests) flagged as a possible under-representation signal, not evidence of low need",
+        "value_numeric": 20.0,
+        "source_citations": [
+          {
+            "note": "files/04 worked example",
+            "dataset": "seed"
+          }
+        ]
+      },
+      {
+        "id": "d4bbc351-a0ca-4631-9348-9a04e8ee8837",
+        "name": "population affected",
+        "value_text": "4,800 residents in Velhe",
+        "value_numeric": 4800.0,
+        "source_citations": [
+          {
+            "region": "Velhe",
+            "dataset_id": "6260512d-8313-49b6-9412-4da7ce09f277",
+            "region_profile_id": "439f3f25-2900-4a75-9551-d8198a3ccb30"
+          }
+        ]
+      },
+      {
+        "id": "b136e51d-3f12-4d5d-97cd-0857d6b12234",
+        "name": "distance to nearest functioning source",
+        "value_text": "no functioning source within the 2,000 m service radius; nearest functioning source \u2248 31.4 km away",
+        "value_numeric": 31393.4,
+        "source_citations": [
+          {
+            "role": "facilities",
+            "radius_m": 2000,
+            "dataset_id": "c4ecd70d-6e56-4902-bf5e-e6630f86d6cb",
+            "facility_type": "water_point"
+          }
+        ]
+      },
+      {
+        "id": "3bbd0c7c-6ab6-4462-a612-9945baebdd1b",
+        "name": "historical investment",
+        "value_text": "low",
+        "value_numeric": 1.0,
+        "source_citations": [
+          {
+            "region": "Velhe",
+            "dataset_id": "6260512d-8313-49b6-9412-4da7ce09f277",
+            "region_profile_id": "439f3f25-2900-4a75-9551-d8198a3ccb30"
+          }
+        ]
+      },
+      {
+        "id": "2ec5a62e-24de-4858-82fc-209518c400bd",
+        "name": "complaint volume",
+        "value_text": "20 citizen requests in this cluster",
+        "value_numeric": 20.0,
+        "source_citations": [
+          {
+            "source": "demand_cluster",
+            "cluster_id": "bd0f2240-f9d9-419a-80cc-06eb0c84381b",
+            "member_count": 20
+          }
+        ]
+      }
+    ],
+    "sample_requests": [
+      {
+        "raw_text": "Velhe \u092e\u0947\u0902 \u092a\u093e\u0928\u0940 \u0915\u0940 \u0938\u092a\u094d\u0932\u093e\u0908 \u092c\u0939\u0941\u0924 \u0915\u092e \u0906 \u0930\u0939\u0940 \u0939\u0948, \u0939\u092b\u093c\u094d\u0924\u0947 \u092e\u0947\u0902 \u0938\u093f\u0930\u094d\u092b 14 \u0926\u093f\u0928\u0964",
+        "detected_language": "Hinglish"
+      },
+      {
+        "raw_text": "Velhe \u092e\u0947\u0902 \u0915\u0908 \u0939\u092b\u093c\u094d\u0924\u094b\u0902 \u0938\u0947 \u092a\u0940\u0928\u0947 \u0915\u093e \u092a\u093e\u0928\u0940 \u0920\u0940\u0915 \u0938\u0947 \u0928\u0939\u0940\u0902 \u0906 \u0930\u0939\u093e \u0939\u0948\u0964",
+        "detected_language": "Hinglish"
+      },
+      {
+        "raw_text": "Velhe \u092e\u0947\u0902 \u092a\u093e\u0928\u0940 \u0917\u0902\u0926\u093e \u0906 \u0930\u0939\u093e \u0939\u0948, \u092a\u0940\u0928\u0947 \u0932\u093e\u092f\u0915\u093c \u0928\u0939\u0940\u0902 \u0939\u0948\u0964",
+        "detected_language": "Hinglish"
+      }
+    ]
+  },
+  "cluster_f6267b6a-7eb7-40d3-88bb-a2391713c151": {
+    "id": "f6267b6a-7eb7-40d3-88bb-a2391713c151",
+    "category": "water_infrastructure",
+    "member_count": 500,
+    "status": "active",
+    "confidence": "high",
+    "confidence_reason": null,
+    "representative_summary": "Drinking water supply inadequate or absent in Kothrud for weeks",
+    "lat": 18.5072618,
+    "lon": 73.8056676,
+    "score": 0.2,
+    "tier": "Low",
+    "components": {
+      "gap_norm": 0.0,
+      "investment_deficit_norm": 0.0,
+      "volume_norm": 1.0,
+      "weights": {
+        "gap": 0.5,
+        "volume": 0.2,
+        "investment_deficit": 0.3
+      }
+    },
+    "gap": {
+      "population": 175000,
+      "facility_count": 10,
+      "gap_value": 17500.0,
+      "dataset_citations": [
+        {
+          "role": "population+investment",
+          "region": "Kothrud",
+          "dataset_id": "6260512d-8313-49b6-9412-4da7ce09f277",
+          "region_profile_id": "b891fca1-414e-44a2-8ee5-f24ceebb228d"
+        },
+        {
+          "role": "facilities",
+          "radius_m": 2000,
+          "dataset_id": "c4ecd70d-6e56-4902-bf5e-e6630f86d6cb",
+          "facility_type": "water_point"
+        }
+      ]
+    },
+    "indicators": [
+      {
+        "id": "5beced88-f3e4-4450-be88-d39f64348afd",
+        "name": "population affected",
+        "value_text": "175,000 residents in Kothrud",
+        "value_numeric": 175000.0,
+        "source_citations": [
+          {
+            "region": "Kothrud",
+            "dataset_id": "6260512d-8313-49b6-9412-4da7ce09f277",
+            "region_profile_id": "b891fca1-414e-44a2-8ee5-f24ceebb228d"
+          }
+        ]
+      },
+      {
+        "id": "17bd9d1e-3704-4466-8994-c3a46010fcaf",
+        "name": "distance to nearest functioning source",
+        "value_text": "0.4 km to the nearest functioning source (10 within the service radius)",
+        "value_numeric": 429.6,
+        "source_citations": [
+          {
+            "role": "facilities",
+            "radius_m": 2000,
+            "dataset_id": "c4ecd70d-6e56-4902-bf5e-e6630f86d6cb",
+            "facility_type": "water_point"
+          }
+        ]
+      },
+      {
+        "id": "38d6cabd-9dce-4370-9602-6d0db59e640d",
+        "name": "historical investment",
+        "value_text": "high",
+        "value_numeric": 0.0,
+        "source_citations": [
+          {
+            "region": "Kothrud",
+            "dataset_id": "6260512d-8313-49b6-9412-4da7ce09f277",
+            "region_profile_id": "b891fca1-414e-44a2-8ee5-f24ceebb228d"
+          }
+        ]
+      },
+      {
+        "id": "efb7ef02-ead9-40d1-9364-d4a6117823e4",
+        "name": "complaint volume",
+        "value_text": "500 citizen requests in this cluster",
+        "value_numeric": 500.0,
+        "source_citations": [
+          {
+            "source": "demand_cluster",
+            "cluster_id": "f6267b6a-7eb7-40d3-88bb-a2391713c151",
+            "member_count": 500
+          }
+        ]
+      }
+    ],
+    "sample_requests": [
+      {
+        "raw_text": "Kothrud \u092e\u0947\u0902 \u092c\u094b\u0930\u0935\u0947\u0932 \u0916\u093c\u0930\u093e\u092c \u0939\u0948 \u0914\u0930 \u092a\u0940\u0928\u0947 \u0915\u0947 \u092a\u093e\u0928\u0940 \u0915\u0940 \u092c\u0921\u093c\u0940 \u0938\u092e\u0938\u094d\u092f\u093e \u0939\u0948\u0964",
+        "detected_language": "Hinglish"
+      },
+      {
+        "raw_text": "Paani ki supply Kothrud me bilkul kharab hai, 2 din se nal sukha hai.",
+        "detected_language": "Hinglish"
+      },
+      {
+        "raw_text": "Kothrud \u092e\u0947\u0902 \u092a\u093e\u0928\u0940 \u0915\u0940 \u0938\u092a\u094d\u0932\u093e\u0908 \u092c\u0939\u0941\u0924 \u0915\u092e \u0906 \u0930\u0939\u0940 \u0939\u0948, \u0939\u092b\u093c\u094d\u0924\u0947 \u092e\u0947\u0902 \u0938\u093f\u0930\u094d\u092b 18 \u0926\u093f\u0928\u0964",
+        "detected_language": "Hinglish"
+      }
+    ]
+  }
+}

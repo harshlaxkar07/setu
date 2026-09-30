@@ -17,8 +17,19 @@ from typing import Any
 
 import httpx
 
+import json
+from pathlib import Path
+
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
 TIMEOUT = 8.0
+
+DEMO_DATA_FILE = Path(__file__).parent / "demo_data.json"
+_DEMO_DATA = None
+if DEMO_DATA_FILE.exists():
+    try:
+        _DEMO_DATA = json.loads(DEMO_DATA_FILE.read_text())
+    except Exception:
+        pass
 
 
 class ApiError(Exception):
@@ -35,6 +46,18 @@ def _get(path: str, params: dict | None = None) -> Any:
             f"backend returned {exc.response.status_code} for {path}"
         ) from exc
     except httpx.HTTPError as exc:
+        if _DEMO_DATA:
+            if path == "/api/clusters":
+                return _DEMO_DATA.get("clusters", [])
+            if path.startswith("/api/clusters/"):
+                cid = path.split("/")[-1]
+                if f"cluster_{cid}" in _DEMO_DATA:
+                    return _DEMO_DATA[f"cluster_{cid}"]
+                if path.endswith("/trace"):
+                    return []
+            if path == "/api/recommendations":
+                status = (params or {}).get("status", "published")
+                return _DEMO_DATA.get(f"recommendations_{status}", [])
         raise ApiError(f"backend unreachable at {BACKEND_URL}: {exc}") from exc
 
 
@@ -52,6 +75,11 @@ def _post(path: str, body: dict | None = None) -> tuple[Any, str | None]:
             detail = resp.text[:200]
         return None, f"backend refused ({resp.status_code}): {detail}"
     except httpx.HTTPError as exc:
+        if _DEMO_DATA:
+            if path.endswith("/resolve"):
+                return {"status": "resolved_unverified"}, None
+            if "/resume" in path:
+                return {"status": "approved"}, None
         return None, f"backend unreachable: {exc}"
 
 
