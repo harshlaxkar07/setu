@@ -10,6 +10,7 @@ import uuid
 import pytest
 
 from app import gemini as gemini_mod
+from app import pii
 from app.constants import EMBEDDING_DIM
 from app.stages import locate
 from tests.conftest_a import (
@@ -190,7 +191,9 @@ def test_new_submission_costs_exactly_one_embedding_call(conn):
     sr = make_sr(conn, text=text)
     locate.run(conn, sr, _transport=transport_returning([nominatim_result()]),
                _embedder=embedder)
-    assert embedder.calls == [text]  # one call, on the citizen's own words
+    # One call, on the citizen's own words — PII-masked (enhancements D13): a
+    # random uuid can contain a phone-like digit run, which is masked too.
+    assert embedder.calls == [pii.mask(text)[0]]
 
 
 def test_repeat_of_cached_text_costs_zero_embedding_calls(conn):

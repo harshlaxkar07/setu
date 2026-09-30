@@ -164,6 +164,21 @@ def make_cluster(conn, *, category: str = CATEGORY_WATER,
 
 # ----------------------------------------------------------------- cleanup
 
+def _delete_test_trust_flags(conn) -> None:
+    conn.execute(
+        """DELETE FROM trust_flags WHERE citizen_request_id IN
+             (SELECT id FROM citizen_requests WHERE submitter_ref LIKE %s)""",
+        (TEST_REF_PREFIX + "%",),
+    )
+
+
+def _delete_memberless_cluster_flags(conn) -> None:
+    conn.execute(
+        """DELETE FROM trust_flags tf WHERE tf.demand_cluster_id IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM cluster_memberships m
+                             WHERE m.demand_cluster_id = tf.demand_cluster_id)""")
+
+
 def cleanup_test_rows(conn) -> None:
     """Remove every row created by Track A tests and restore seeded state.
 
@@ -175,6 +190,7 @@ def cleanup_test_rows(conn) -> None:
              (SELECT id FROM citizen_requests WHERE submitter_ref LIKE %s)""",
         (TEST_REF_PREFIX + "%",),
     )
+    _delete_test_trust_flags(conn)
     conn.execute(
         """DELETE FROM cluster_memberships WHERE geocoded_request_id IN
              (SELECT gr.id FROM geocoded_requests gr
@@ -207,6 +223,7 @@ def cleanup_test_rows(conn) -> None:
     conn.execute(
         "ALTER TABLE citizen_requests ENABLE TRIGGER citizen_requests_immutable")
     # Drop clusters tests founded (now memberless) and restore member counts.
+    _delete_memberless_cluster_flags(conn)
     conn.execute(
         """DELETE FROM demand_clusters c
            WHERE NOT EXISTS (SELECT 1 FROM cluster_memberships m
@@ -239,6 +256,8 @@ def cleanup_test_state() -> None:
               JOIN structured_requests sr ON sr.id = gr.structured_request_id
               JOIN citizen_requests cr ON cr.id = sr.citizen_request_id
               WHERE cr.submitter_ref LIKE 'test-%')""")
+        _delete_test_trust_flags(conn)
+        _delete_memberless_cluster_flags(conn)
         # Any cluster left without members (from this or any prior ad-hoc run)
         # goes away entirely, children first.
         for tbl in ("approvals",):

@@ -49,7 +49,8 @@ SELECT dc.id::text, dc.category, dc.member_count, dc.status::text,
        ST_Y(dc.centroid) AS lat, ST_X(dc.centroid) AS lon,
        ps.score, ps.gap_norm, ps.investment_deficit_norm, ps.volume_norm,
        ps.weights,
-       gs.population, gs.facility_count, gs.gap_value, gs.dataset_citations
+       gs.population, gs.facility_count, gs.gap_value, gs.dataset_citations,
+       tv.excluded, tv.open_request_flags, tc.open_cluster_flags
 FROM demand_clusters dc
 LEFT JOIN LATERAL (
     SELECT * FROM priority_scores
@@ -59,6 +60,23 @@ LEFT JOIN LATERAL (
     SELECT * FROM gap_scores
     WHERE demand_cluster_id = dc.id ORDER BY created_at DESC LIMIT 1
 ) gs ON true
+-- Trust (enhancements D2): members excluded from counted volume, open flags.
+LEFT JOIN LATERAL (
+    SELECT count(DISTINCT sr.citizen_request_id)
+               FILTER (WHERE tf.status IN ('open', 'confirmed')) AS excluded,
+           count(tf.id) FILTER (WHERE tf.status = 'open') AS open_request_flags
+    FROM cluster_memberships cm
+    JOIN geocoded_requests gr ON gr.id = cm.geocoded_request_id
+    JOIN structured_requests sr ON sr.id = gr.structured_request_id
+    JOIN trust_flags tf ON tf.citizen_request_id = sr.citizen_request_id
+         AND tf.rule IN ('duplicate_burst', 'repeat_source')
+    WHERE cm.demand_cluster_id = dc.id
+) tv ON true
+LEFT JOIN LATERAL (
+    SELECT count(*) AS open_cluster_flags FROM trust_flags
+    WHERE demand_cluster_id = dc.id AND citizen_request_id IS NULL
+      AND status = 'open'
+) tc ON true
 """
 
 
@@ -69,6 +87,14 @@ def _cluster_payload(row: dict[str, Any]) -> dict[str, Any]:
         "id": row["id"],
         "category": row["category"],
         "member_count": row["member_count"],
+        # Total members minus those excluded by open/confirmed trust flags —
+        # the volume the PriorityScore actually uses (enhancements D2).
+        "counted_volume": row["member_count"] - int(row["excluded"] or 0),
+        "trust": {
+            "excluded": int(row["excluded"] or 0),
+            "open_request_flags": int(row["open_request_flags"] or 0),
+            "open_cluster_flags": int(row["open_cluster_flags"] or 0),
+        },
         "status": row["status"],
         "confidence": row["confidence"],
         "confidence_reason": row["confidence_reason"],

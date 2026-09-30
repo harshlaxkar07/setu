@@ -35,6 +35,7 @@ from app.stages import fuse as fuse_stage
 from app.stages import locate as locate_stage
 from app.stages import recommend as recommend_stage
 from app.stages import score as score_stage
+from app.stages import trust as trust_stage
 from app.stages import understand as understand_stage
 
 
@@ -83,6 +84,19 @@ def _cluster(state: PipelineState) -> dict:
             if result.get("alternatives"):
                 e["alternatives"] = result["alternatives"]
     return {"cluster_id": result["cluster_id"]}
+
+
+def _trust(state: PipelineState) -> dict:
+    """Anti-manipulation checks (enhancements design D2): flags with reasons,
+    never deletion. Runs before Fuse/Score so flagged volume is excluded."""
+    with db.pool.connection() as conn:
+        with trace.traced_stage(conn, state["trace_id"], "Trust",
+                                input_ref=state["geocoded_request_id"]) as e:
+            flags = trust_stage.run(conn, state["geocoded_request_id"],
+                                    state["cluster_id"])
+            e["output_ref"] = state["cluster_id"]
+            e["flags"] = [{"rule": f["rule"], "reason": f["reason"]} for f in flags]
+    return {}
 
 
 def _fuse(state: PipelineState) -> dict:
@@ -183,6 +197,7 @@ def _build_graph():
     g.add_node("understand", _understand)
     g.add_node("locate", _locate)
     g.add_node("cluster", _cluster)
+    g.add_node("trust", _trust)
     g.add_node("fuse", _fuse)
     g.add_node("score", _score)
     g.add_node("recommend", _recommend)
@@ -191,7 +206,8 @@ def _build_graph():
     g.add_edge(START, "understand")
     g.add_edge("understand", "locate")
     g.add_edge("locate", "cluster")
-    g.add_edge("cluster", "fuse")
+    g.add_edge("cluster", "trust")
+    g.add_edge("trust", "fuse")
     g.add_edge("fuse", "score")
     g.add_edge("score", "recommend")
     g.add_edge("recommend", "publish_gate")

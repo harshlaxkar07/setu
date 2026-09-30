@@ -99,7 +99,7 @@ def test_full_run_suspends_at_gate_with_complete_trace(monkeypatch):
         t = _trace(conn, thread_id)
         assert t["status"] == "awaiting_approval"
         stages = [s["stage"] for s in t["stages"]]
-        assert stages == ["Understand", "Locate", "Cluster",
+        assert stages == ["Understand", "Locate", "Cluster", "Trust",
                           "Fuse", "Score", "Recommend"]
         assert all(s.get("duration_ms") is not None for s in t["stages"])
         rec = conn.execute(
