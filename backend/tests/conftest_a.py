@@ -263,6 +263,17 @@ def cleanup_test_state() -> None:
               WHERE cr.submitter_ref LIKE 'test-%')""")
         _delete_test_trust_flags(conn)
         _delete_memberless_cluster_flags(conn)
+        # Recommendations drafted by test runs — including on SEEDED clusters a
+        # test request joined (e.g. Velhe) — go too, with their approvals.
+        test_threads = """SELECT thread_id FROM run_traces WHERE citizen_request_id IN
+                          (SELECT id FROM citizen_requests WHERE submitter_ref LIKE 'test-%')
+                          AND thread_id IS NOT NULL"""
+        conn.execute(f"""UPDATE run_traces SET joined_recommendation_id = NULL
+                         WHERE joined_recommendation_id IN
+                           (SELECT id FROM recommendations WHERE thread_id IN ({test_threads}))""")
+        conn.execute(f"""DELETE FROM approvals WHERE recommendation_id IN
+                           (SELECT id FROM recommendations WHERE thread_id IN ({test_threads}))""")
+        conn.execute(f"DELETE FROM recommendations WHERE thread_id IN ({test_threads})")
         # Any cluster left without members (from this or any prior ad-hoc run)
         # goes away entirely, children first.
         for tbl in ("approvals",):

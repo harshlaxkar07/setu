@@ -44,7 +44,7 @@
 
 ## 7. Policy briefs
 
-- [ ] 7.1 Implement `GET /api/briefs/{cluster_id}` print-ready bilingual HTML (D12) with the draft watermark when unapproved; verify tests that the brief contains every stored indicator, the score breakdown and approval reviewer/time, contains the draft mark before approval, and renders on one A4 page in a headless browser print
+- [x] 7.1 Implement `GET /api/briefs/{cluster_id}` print-ready bilingual HTML (D12) with the draft watermark when unapproved; verify tests that the brief contains every stored indicator, the score breakdown and approval reviewer/time, contains the draft mark before approval, and renders on one A4 page in a headless browser print
 
 ## 8. Dashboard analytics
 
