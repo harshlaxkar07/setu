@@ -24,3 +24,18 @@ backend/media/
 # OS / editor noise
 .DS_Store
 *.swp
+
+# Pitch deck & generated presentation documents
+*.pdf
+*.pptx
+pitch-deck/
+SLIDES_GENERATION_PROMPT.md
+SETU_HACKATHON_PITCH_AND_ARCHITECTURE_MASTER.md
+
+# Specs & internal agent workflows
+openspec/
+files/
+.agent/
+.agents/
+.claude/
+
