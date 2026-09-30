@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.constants import CATEGORY_HEALTH, CATEGORY_WATER
 from app.main import app
-from tests.conftest_a import ensure_pool
+from tests.conftest_a import connect, ensure_pool
 
 
 @pytest.fixture(scope="module")
@@ -62,3 +62,22 @@ def test_ranking_comparison_flips_the_worked_example(client):
 def test_unknown_category_is_rejected(client):
     r = client.get("/api/insights/silent-regions", params={"category": "nope"})
     assert r.status_code == 422
+
+
+def test_trends_split_flagged_and_counted(client):
+    rows = client.get("/api/insights/trends", params={"category": CATEGORY_WATER}).json()
+    assert rows and all(r["category"] == CATEGORY_WATER for r in rows)
+    assert all(r["counted"] + r["flagged"] == r["total"] for r in rows)
+    assert sum(r["total"] for r in rows) == 520  # seeded water history (60 days)
+
+
+def test_version_changes_when_data_changes(client):
+    from tests.conftest_a import cleanup_test_rows, make_citizen_request
+    before = client.get("/api/ops/version").json()["version"]
+    assert client.get("/api/ops/version").json()["version"] == before  # stable
+    with connect() as conn:
+        make_citizen_request(conn)
+        try:
+            assert client.get("/api/ops/version").json()["version"] != before
+        finally:
+            cleanup_test_rows(conn)

@@ -183,11 +183,29 @@ p, li, label, .stMarkdown {{ color: var(--ink); }}
 
 .section-title {{ font-size: 16px; font-weight: 700; margin: 24px 0 8px 0; }}
 .section-sub {{ font-weight: 500; color: var(--ink-2); }}
+/* ---- enhancements: tables, legend, silent regions, audit ---------------- */
+.setu-table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+.setu-table th {{ text-align: left; color: var(--ink-2); font-weight: 600;
+                  border-bottom: 1px solid var(--line); padding: 6px 8px; }}
+.setu-table td {{ border-bottom: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }}
+.rank-up {{ color: var(--priority-low); font-weight: 600; }}
+.rank-down {{ color: var(--priority-high); font-weight: 600; }}
+.badge-signal {{ background: #EEF1F4; color: var(--ink-2); font-weight: 500; }}
+.silent-card {{ border-left: 4px solid var(--bridge-blue-deep); }}
+.factor-list {{ margin: 4px 0 0 18px; padding: 0; font-size: 13px; color: var(--ink-2); }}
+.legend {{ line-height: 26px; }}
+.legend-heat {{ display: inline-block; width: 22px; height: 10px; border-radius: 5px;
+                background: linear-gradient(90deg, #F2C98B, #C2372E); vertical-align: middle; }}
+.legend-ring {{ display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+                border: 2px solid var(--bridge-blue-deep); vertical-align: middle; }}
+.audit-ok {{ background: var(--priority-low-soft); color: var(--priority-low); font-weight: 600; }}
+.audit-broken {{ background: var(--priority-high-soft); color: var(--priority-high); font-weight: 700; }}
+.live-dot {{ font-size: 12px; color: var(--priority-low); text-align: right; }}
 .signed-in {{ background: var(--priority-low-soft); color: var(--priority-low);
               border-radius: 8px; padding: 8px 16px; font-size: 13px; margin-top: 4px; }}
 
 /* ---- summary strip ------------------------------------------------------ */
-.kpi-strip {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+.kpi-strip {{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
               gap: 16px; margin-bottom: 8px; }}
 .kpi {{ background: var(--card); border: 1px solid var(--line); border-radius: 12px;
         padding: 12px 16px; }}
@@ -197,7 +215,10 @@ p, li, label, .stMarkdown {{ color: var(--ink); }}
 .kpi-high .kpi-value {{ color: var(--priority-high); }}
 .kpi-pending {{ border-left: 4px solid var(--pending-gate); }}
 .kpi-pending .kpi-value {{ color: var(--pending-gate); }}
-@media (max-width: 900px) {{
+@media (max-width: 1100px) {{
+  .kpi-strip {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
+}}
+@media (max-width: 700px) {{
   .kpi-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
 }}
 

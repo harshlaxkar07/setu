@@ -128,3 +128,26 @@ def ranking_comparison(conn: psycopg.Connection, category: str) -> list[dict[str
              "rank_by_score": score_rank[c["id"]],
              "rank_change": count_rank[c["id"]] - score_rank[c["id"]]}
             for c in by_score]
+
+
+def trends(conn: psycopg.Connection, category: str | None, days: int) -> list[dict[str, Any]]:
+    """Daily request arrivals per category, split into requests excluded by
+    an open/confirmed trust flag and the rest (dashboard trend chart)."""
+    return [
+        {"day": d.isoformat(), "category": c, "total": int(total),
+         "flagged": int(flagged), "counted": int(total) - int(flagged)}
+        for d, c, total, flagged in conn.execute(
+            """SELECT date_trunc('day', cr.created_at)::date AS day, sr.category,
+                      count(*),
+                      count(*) FILTER (WHERE EXISTS (
+                          SELECT 1 FROM trust_flags tf
+                          WHERE tf.citizen_request_id = cr.id
+                            AND tf.rule IN ('duplicate_burst', 'repeat_source')
+                            AND tf.status IN ('open', 'confirmed')))
+               FROM citizen_requests cr
+               JOIN structured_requests sr ON sr.citizen_request_id = cr.id
+               WHERE cr.created_at > now() - make_interval(days => %s)
+                 AND (%s::text IS NULL OR sr.category = %s)
+               GROUP BY 1, 2 ORDER BY 1, 2""",
+            (days, category, category)).fetchall()
+    ]

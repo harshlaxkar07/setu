@@ -150,3 +150,70 @@ def post_verification_review(record_id: str, decision: str,
     """decision ∈ {'confirm_resolved', 'reject_resolution'} (§8 endpoint)."""
     return _post(f"/api/verifications/{record_id}/review",
                  {"decision": decision}, token)
+
+
+# --- enhancements: live refresh, analytics, planner, trust, audit, briefs ----
+
+def get_version() -> str | None:
+    """Cheap data fingerprint for live refresh (None when unreachable)."""
+    try:
+        return _get("/api/ops/version")["version"]
+    except ApiError:
+        return None
+
+
+def get_trends(category: str | None, days: int = 60) -> list[dict]:
+    params = {"days": days}
+    if category:
+        params["category"] = category
+    return _get("/api/insights/trends", params=params)
+
+
+def get_silent_regions(category: str | None = None) -> list[dict]:
+    return _get("/api/insights/silent-regions",
+                params={"category": category} if category else None)
+
+
+def get_ranking(category: str) -> list[dict]:
+    return _get("/api/insights/ranking", params={"category": category})
+
+
+def get_impact(cluster_id: str) -> dict:
+    return _get(f"/api/clusters/{cluster_id}/impact")
+
+
+def get_brief_html(cluster_id: str) -> str:
+    try:
+        resp = httpx.get(f"{BACKEND_URL}/api/briefs/{cluster_id}", timeout=TIMEOUT)
+        resp.raise_for_status()
+        return resp.text
+    except httpx.HTTPError as exc:
+        raise ApiError(f"brief unavailable: {exc}") from exc
+
+
+def post_whatif(category: str, lat: float, lon: float) -> tuple[Any, str | None]:
+    return _post("/api/planner/whatif", {"category": category, "lat": lat, "lon": lon})
+
+
+def post_allocate(category: str, n: int) -> tuple[Any, str | None]:
+    return _post("/api/planner/allocate", {"category": category, "n": n})
+
+
+def get_trust_flags(status: str = "open", cluster_id: str | None = None) -> list[dict]:
+    params = {"status": status}
+    if cluster_id:
+        params["cluster_id"] = cluster_id
+    return _get("/api/trust/flags", params=params)
+
+
+def post_trust_review(flag_id: str, decision: str, token: str) -> tuple[Any, str | None]:
+    """decision ∈ {'clear', 'confirm'}; reviewer comes from the token."""
+    return _post(f"/api/trust/flags/{flag_id}/review", {"decision": decision}, token)
+
+
+def get_audit_verify() -> dict:
+    return _get("/api/audit/verify")
+
+
+def get_audit_log(limit: int = 20) -> list[dict]:
+    return _get("/api/audit/log", params={"limit": limit})

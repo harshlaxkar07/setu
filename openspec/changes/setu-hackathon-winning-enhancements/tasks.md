@@ -48,12 +48,12 @@
 
 ## 8. Dashboard analytics
 
-- [ ] 8.1 Wrap data panels in `st.fragment(run_every=...)` with selection, tab, category filter and reviewer session in session_state (D10); verify in a browser that a new citizen submission updates the member count within one interval while the selected cluster and open tab stay put
+- [x] 8.1 Wrap data panels in `st.fragment(run_every=...)` with selection, tab, category filter and reviewer session in session_state (D10); verify in a browser that a new citizen submission updates the member count within one interval while the selected cluster and open tab stay put
 - [x] 8.2 Reviewer sign-in panel; decision buttons disabled when signed out; token passed on decision calls; verify signed-out viewers see recommendations without actions and a signed-in approval records the account name
-- [ ] 8.3 Category filter applied to map, list, summary strip and trends; map layer toggles (clusters, heatmap on counted volume, silent regions) with labelled legend; verify grayscale screenshots still distinguish every layer and tier
-- [ ] 8.4 Trends chart (flagged vs unflagged per day, per category) and total vs counted volume on cluster cards with trust-flag badges and clear/confirm actions; verify after `spam_attack.py` the spike renders as flagged volume
-- [ ] 8.5 Equity tab (ranking comparison + silent regions list), Planner tab (what-if on selected cluster + allocation for N sites, labelled advisory), Impact panel on resolved clusters, and brief download button; verify each view in a browser against the seeded data with no Streamlit exceptions
-- [ ] 8.6 Audit panel showing chain status from `/api/audit/verify`; verify it reports intact after demo decisions
+- [x] 8.3 Category filter applied to map, list, summary strip and trends; map layer toggles (clusters, heatmap on counted volume, silent regions) with labelled legend; verify grayscale screenshots still distinguish every layer and tier
+- [x] 8.4 Trends chart (flagged vs unflagged per day, per category) and total vs counted volume on cluster cards with trust-flag badges and clear/confirm actions; verify after `spam_attack.py` the spike renders as flagged volume
+- [x] 8.5 Equity tab (ranking comparison + silent regions list), Planner tab (what-if on selected cluster + allocation for N sites, labelled advisory), Impact panel on resolved clusters, and brief download button; verify each view in a browser against the seeded data with no Streamlit exceptions
+- [x] 8.6 Audit panel showing chain status from `/api/audit/verify`; verify it reports intact after demo decisions
 
 ## 9. Evaluation, scale and demo operations
 

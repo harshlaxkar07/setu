@@ -25,3 +25,10 @@ def silent_regions(category: str | None = None) -> list[dict[str, Any]]:
 def ranking(category: str) -> list[dict[str, Any]]:
     with db.pool.connection() as conn:
         return insights.ranking_comparison(conn, category)
+
+
+@router.get("/trends")
+def trends(category: str | None = None, days: int = 60) -> list[dict[str, Any]]:
+    days = max(1, min(days, 365))
+    with db.pool.connection() as conn:
+        return insights.trends(conn, category, days)
