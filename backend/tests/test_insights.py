@@ -65,10 +65,32 @@ def test_unknown_category_is_rejected(client):
 
 
 def test_trends_split_flagged_and_counted(client):
-    rows = client.get("/api/insights/trends", params={"category": CATEGORY_WATER}).json()
-    assert rows and all(r["category"] == CATEGORY_WATER for r in rows)
-    assert all(r["counted"] + r["flagged"] == r["total"] for r in rows)
-    assert sum(r["total"] for r in rows) == 520  # seeded water history (60 days)
+    from tests.conftest_a import cleanup_test_rows, make_citizen_request, make_structured_request
+
+    def totals():
+        rows = client.get("/api/insights/trends", params={"category": CATEGORY_WATER}).json()
+        assert all(r["category"] == CATEGORY_WATER for r in rows)
+        assert all(r["counted"] + r["flagged"] == r["total"] for r in rows)
+        return {k: sum(r[k] for r in rows) for k in ("total", "counted", "flagged")}
+
+    before = totals()
+    # Seed dates eventually leave the rolling window. Assert the contribution
+    # of fresh controlled reports instead of assuming the seed never ages.
+    with connect() as conn:
+        try:
+            for flagged in (False, True):
+                cr = make_citizen_request(conn)
+                make_structured_request(conn, cr, category=CATEGORY_WATER)
+                if flagged:
+                    conn.execute("""INSERT INTO trust_flags
+                        (citizen_request_id, rule, reason)
+                        VALUES (%s, 'duplicate_burst', 'test burst')""", (cr,))
+                    conn.commit()
+            after = totals()
+            assert {k: after[k] - before[k] for k in before} == {
+                "total": 2, "counted": 1, "flagged": 1}
+        finally:
+            cleanup_test_rows(conn)
 
 
 def test_version_changes_when_data_changes(client):

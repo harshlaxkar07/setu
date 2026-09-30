@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-09-30T09:48:23+00:00",
+  "mode": "live",
+  "provider": "gemini/gemini-3.8-flash",
+  "seconds": 6.5,
+  "requested_items": 1,
+  "complete": true,
+  "summary": {
+    "items": 1,
+    "errors": 0,
+    "overall": {
+      "category": 1.0,
+      "urgency": 1.0,
+      "location": 1.0,
+      "cluster": 1.0
+    },
+    "by_language": {
+      "hi": {
+        "items": 1,
+        "category": 1.0,
+        "urgency": 1.0,
+        "location": 1.0,
+        "cluster": 1.0
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "e001",
+      "language": "hi",
+      "expected": {
+        "category": "water_infrastructure",
+        "urgency": "high",
+        "location": "Velhe",
+        "cluster": "Velhe/water_infrastructure"
+      },
+      "predicted": {
+        "category": "water_infrastructure",
+        "urgency": "high",
+        "location": "Velhe",
+        "cluster": "Velhe/water_infrastructure",
+        "detected_language": "Hindi",
+        "location_confidence": "medium",
+        "location_reason": "resolved via fallback: suffix-stripped mention 'वेल्हे' geocoded (original: location could not be resolved: no geocoding result)"
+      },
+      "correct": {
+        "category": true,
+        "urgency": true,
+        "location": true,
+        "cluster": true
+      }
+    }
+  ]
+}

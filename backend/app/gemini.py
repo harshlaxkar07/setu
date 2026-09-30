@@ -25,6 +25,7 @@ from typing import Any, Type
 from pydantic import BaseModel
 
 from app.constants import GEMINI_MODEL
+from app import replay
 
 FIXTURE_DIR = Path(os.environ.get("FIXTURE_DIR", "/app/fixtures"))
 
@@ -51,7 +52,7 @@ def _fixture_path(key: str) -> Path:
 
 
 def _replay_enabled() -> bool:
-    return os.environ.get("DEMO_REPLAY", "0") == "1"
+    return replay.enabled()
 
 
 def _lookup_fixture(stage: str, prompt: str) -> str | None:
@@ -75,7 +76,9 @@ def _live_call(prompt: str, image_bytes: bytes | None) -> str:
     from langchain_core.messages import HumanMessage
     from langchain_google_genai import ChatGoogleGenerativeAI
 
-    llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL)
+    # Setu owns the single retry. SDK retries used to multiply it and could
+    # leave evaluation stalled for minutes on an exhausted quota.
+    llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, timeout=30, max_retries=0)
     if image_bytes is not None:
         import base64
         mime = "image/png" if image_bytes[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
@@ -152,6 +155,7 @@ def call_gemini(
         if hit is not None:
             llm.record_call({**meta, "replayed": True, "latency_ms": 0.0})
             return _validate(hit, schema)
+        replay.require_recording(f"{stage} model response")
 
     last_err: Exception | None = None
     for attempt in (1, 2):  # exactly one retry (orchestration spec)
@@ -163,8 +167,9 @@ def call_gemini(
                 "latency_ms": round((time.monotonic() - start) * 1000, 1),
                 "input_tokens": tokens_in, "output_tokens": tokens_out,
             })
+            validated = _validate(raw, schema)
             _record_fixture(fixture_stage, fixture_prompt, raw)
-            return _validate(raw, schema)
+            return validated
         except _ValidationFailed:
             raise  # malformed output is a contract failure, not a transient error
         except Exception as exc:  # API error / rate limit — retry once

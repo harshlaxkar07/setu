@@ -28,6 +28,7 @@ import time
 import psycopg
 
 from app.constants import EMBEDDING_DIM
+from app import replay
 from app.gemini import FIXTURE_DIR, _replay_enabled
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
@@ -102,6 +103,7 @@ def _geocode(query: str, transport) -> list[dict]:
         path = _geo_fixture_path(query)
         if path.exists():
             return json.loads(path.read_text())["results"]
+        replay.require_recording("geocode")
     _throttle()
     results = transport(query)
     try:
@@ -144,6 +146,7 @@ def _embedding_for(text: str, embedder) -> list[float] | None:
     cache = _embed_cache_path(text)
     if cache.exists():
         return json.loads(cache.read_text())["embedding"]
+    replay.require_recording("embedding")
     vec = embedder(text)
     if len(vec) != EMBEDDING_DIM:
         raise ValueError(f"embedding has {len(vec)} dims, expected {EMBEDDING_DIM}")
@@ -242,6 +245,8 @@ def _fallback_locate(conn: psycopg.Connection, mention: str, transport, *,
                 return (float(best["lon"]), float(best["lat"]),
                         f"resolved via fallback: suffix-stripped mention "
                         f"'{stripped}' geocoded")
+        except replay.MissingRecording:
+            raise
         except Exception:
             pass  # the database fallbacks below still apply
     for text in dict.fromkeys((mention, stripped)):
@@ -300,6 +305,8 @@ def run(conn: psycopg.Connection, structured_request_id: str, *,
             best, confidence, reason = _assess(results)
             if best is not None:
                 lon, lat = float(best["lon"]), float(best["lat"])
+        except replay.MissingRecording:
+            raise
         except Exception as exc:  # service down / timeout — flag, never drop
             service_down = True
             confidence, reason = "flagged", f"geocoding service unavailable: {exc}"

@@ -20,7 +20,6 @@ A live run records fixtures, so a following --replay run is reproducible.
 """
 import argparse
 import json
-import os
 import sys
 import time
 import uuid
@@ -32,7 +31,7 @@ import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import db  # noqa: E402
+from app import db, replay as replay_policy  # noqa: E402
 from eval import dataset  # noqa: E402
 
 REPORT = Path(__file__).parent / "report.json"
@@ -49,6 +48,19 @@ def _cluster_label(conn, cluster_id: str) -> str:
 
 def evaluate_item(conn, item: dict, prefix: str, *, understand_caller=None,
                   transport=None, embedder=None) -> dict:
+    try:
+        return _evaluate_item(conn, item, prefix, understand_caller=understand_caller,
+                              transport=transport, embedder=embedder)
+    except Exception as exc:
+        conn.rollback()
+        return {"id": item["id"], "language": item["language"],
+                "expected": {k: item[k] for k in METRICS},
+                "error": str(exc)[:200], "error_type": type(exc).__name__,
+                "correct": {m: False for m in METRICS}}
+
+
+def _evaluate_item(conn, item: dict, prefix: str, *, understand_caller=None,
+                   transport=None, embedder=None) -> dict:
     from app.stages import cluster, locate, understand
 
     out = {"id": item["id"], "language": item["language"], "expected": {
@@ -58,13 +70,7 @@ def evaluate_item(conn, item: dict, prefix: str, *, understand_caller=None,
            VALUES ('text', %s, %s) RETURNING id""",
         (item["text"], f"{prefix}{item['id']}")).fetchone()
     conn.commit()
-    try:
-        sr = understand.run(conn, str(cr), _caller=understand_caller)
-    except Exception as exc:
-        conn.rollback()
-        out["error"] = f"understand failed: {exc}"[:200]
-        out["correct"] = {m: False for m in METRICS}
-        return out
+    sr = understand.run(conn, str(cr), _caller=understand_caller)
     category, urgency, language = conn.execute(
         "SELECT category, urgency::text, detected_language FROM structured_requests WHERE id=%s",
         (sr,)).fetchone()
@@ -129,22 +135,18 @@ def summarise(results: list[dict]) -> dict:
 
 
 def run(*, replay: bool, limit: int | None = None, report_path: Path = REPORT,
-        **stage_overrides) -> dict:
-    previous_replay = os.environ.get("DEMO_REPLAY")
-    if replay:
-        os.environ["DEMO_REPLAY"] = "1"
-    try:
+        progress: bool = False, **stage_overrides) -> dict:
+    if limit is not None and limit < 1:
+        raise ValueError("limit must be positive")
+    # Force live mode even when the backend has DEMO_REPLAY=1, and prohibit
+    # live fallback in offline mode. Restore the caller's policy on exit.
+    with replay_policy.mode(replay=replay, strict=replay):
         return _run(replay=replay, limit=limit, report_path=report_path,
-                    **stage_overrides)
-    finally:  # never leak replay mode into the rest of the process
-        if previous_replay is None:
-            os.environ.pop("DEMO_REPLAY", None)
-        else:
-            os.environ["DEMO_REPLAY"] = previous_replay
+                    progress=progress, **stage_overrides)
 
 
 def _run(*, replay: bool, limit: int | None, report_path: Path,
-         **stage_overrides) -> dict:
+         progress: bool, **stage_overrides) -> dict:
     from app import llm
     items = dataset.load()[:limit] if limit else dataset.load()
     prefix = f"eval-{uuid.uuid4().hex[:8]}-"
@@ -153,7 +155,15 @@ def _run(*, replay: bool, limit: int | None, report_path: Path,
     with psycopg.connect(db.DATABASE_URL) as conn:
         try:
             for item in items:
-                results.append(evaluate_item(conn, item, prefix, **stage_overrides))
+                result = evaluate_item(conn, item, prefix, **stage_overrides)
+                results.append(result)
+                if progress:
+                    status = result.get("error_type", "evaluated")
+                    print(f"[{len(results)}/{len(items)}] {item['id']}: {status}", flush=True)
+                # Don't spend the remaining quota/time repeating a provider
+                # outage. Persist an explicitly incomplete report instead.
+                if result.get("error_type") == "GeminiUnavailable":
+                    break
         finally:
             cleanup(conn, prefix)
     provider = llm.get_provider()
@@ -162,14 +172,17 @@ def _run(*, replay: bool, limit: int | None, report_path: Path,
         "mode": "replay (recorded fixtures)" if replay else "live",
         "provider": f"{provider.name}/{provider.model}",
         "seconds": round(time.monotonic() - start, 1),
+        "requested_items": len(items),
+        "complete": len(results) == len(items) and not any("error" in r for r in results),
         "summary": summarise(results),
         "results": results,
     }
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
     return report
 
 
-def print_table(report: dict) -> None:
+def print_table(report: dict, report_path: Path = REPORT) -> None:
     s = report["summary"]
     print(f"\nSetu evaluation — {s['items']} items, {report['mode']}, "
           f"{report['provider']}, {report['seconds']} s, errors: {s['errors']}")
@@ -178,7 +191,9 @@ def print_table(report: dict) -> None:
         (f"{k} ({v['items']})", v) for k, v in s["by_language"].items()]
     for name, m in rows:
         print(f"{name:12}" + "".join(f"{(m[k] or 0) * 100:>9.0f}%" for k in METRICS))
-    print(f"\nFull per-item results: {REPORT}")
+    if not report.get("complete", True):
+        print("INCOMPLETE: service/recording errors are not model-accuracy evidence.")
+    print(f"\nFull per-item results: {report_path}")
 
 
 def main() -> int:
@@ -186,9 +201,14 @@ def main() -> int:
     ap.add_argument("--replay", action="store_true",
                     help="use recorded fixtures (reproducible, offline)")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--output", type=Path, default=REPORT,
+                    help="report destination; keep live and replay reports separately")
     args = ap.parse_args()
-    print_table(run(replay=args.replay, limit=args.limit))
-    return 0
+    if args.limit is not None and args.limit < 1:
+        ap.error("--limit must be positive")
+    report = run(replay=args.replay, limit=args.limit, report_path=args.output, progress=True)
+    print_table(report, args.output)
+    return 0 if report["complete"] else 1
 
 
 if __name__ == "__main__":
