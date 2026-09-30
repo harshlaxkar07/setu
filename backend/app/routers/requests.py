@@ -188,6 +188,11 @@ def request_status(request_id: str) -> dict:
         receipt = {"category": sr[0], "urgency": sr[1], "summary": sr[2],
                    "detected_language": sr[3]}
     payload = {"status": trace[0] if trace else "received", "receipt": receipt}
+    # Location follow-up (enhancements D8): the chat asks once when true.
+    from app import relocate
+    with db.pool.connection() as conn:
+        if relocate.needs_location(conn, request_id):
+            payload["needs_location"] = True
     if prompts:
         payload["verification_prompts"] = [
             {"cluster_id": p[0], "category": p[1], "summary": p[2],
@@ -195,3 +200,46 @@ def request_status(request_id: str) -> dict:
             for p in prompts
         ]
     return payload
+
+
+@router.get("/{request_id}/timeline")
+def request_timeline(request_id: str) -> dict:
+    """Stage-by-stage progress for the citizen (enhancements D11)."""
+    from app import timeline
+    try:
+        uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="unknown request")
+    with db.pool.connection() as conn:
+        out = timeline.build(conn, request_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="unknown request")
+    return out
+
+
+class LocationAnswer(BaseModel):
+    """The citizen's answer to "which village, ward or landmark?"."""
+
+    answer: str = Field(min_length=2, max_length=200)
+    conversation_id: str = Field(min_length=8, max_length=64)
+
+
+@router.post("/{request_id}/location")
+def answer_location(request_id: str, body: LocationAnswer) -> dict:
+    """Attach the follow-up answer to the SAME request and re-locate it
+    (enhancements D8). Only the conversation that submitted it may answer."""
+    from app import relocate
+    try:
+        uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="unknown request")
+    with db.pool.connection() as conn:
+        owner = conn.execute(
+            "SELECT submitter_ref FROM citizen_requests WHERE id = %s",
+            (request_id,)).fetchone()
+    if owner is None or owner[0] != body.conversation_id:
+        raise HTTPException(status_code=404, detail="unknown request")
+    try:
+        return relocate.relocate(request_id, body.answer.strip())
+    except relocate.NotEligible as exc:
+        raise HTTPException(status_code=409, detail=str(exc))

@@ -166,6 +166,11 @@ def make_cluster(conn, *, category: str = CATEGORY_WATER,
 
 def _delete_test_trust_flags(conn) -> None:
     conn.execute(
+        """DELETE FROM location_followups WHERE citizen_request_id IN
+             (SELECT id FROM citizen_requests WHERE submitter_ref LIKE %s)""",
+        (TEST_REF_PREFIX + "%",),
+    )
+    conn.execute(
         """DELETE FROM trust_flags WHERE citizen_request_id IN
              (SELECT id FROM citizen_requests WHERE submitter_ref LIKE %s)""",
         (TEST_REF_PREFIX + "%",),

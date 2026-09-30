@@ -68,7 +68,7 @@ def _candidates(conn: psycopg.Connection, geocoded_request_id: str,
 
 def _new_cluster(conn: psycopg.Connection, geocoded_request_id: str,
                  category: str, summary: str, confidence: str,
-                 reason: str | None) -> dict:
+                 reason: str | None, commit: bool = True) -> dict:
     """Found a new single-member DemandCluster (unmatched-request posture)."""
     c = conn.execute(
         """INSERT INTO demand_clusters
@@ -86,13 +86,18 @@ def _new_cluster(conn: psycopg.Connection, geocoded_request_id: str,
            VALUES (%s, %s, NULL) RETURNING id""",
         (geocoded_request_id, cluster_id),
     ).fetchone()
-    conn.commit()
+    if commit:
+        conn.commit()
     return {"cluster_id": cluster_id, "membership_id": str(m[0]),
             "similarity": None, "alternatives": []}
 
 
-def run(conn: psycopg.Connection, geocoded_request_id: str) -> dict:
+def run(conn: psycopg.Connection, geocoded_request_id: str, *,
+        commit: bool = True) -> dict:
     """Assign the request to a DemandCluster; never leaves it unassigned.
+
+    commit=False lets a caller make re-assignment atomic with its own
+    changes (the location follow-up's relocate, enhancements D8).
 
     Returns {cluster_id, membership_id, similarity, alternatives:
     [{cluster_id, similarity}]} — the caller logs `alternatives` in the
@@ -117,12 +122,13 @@ def run(conn: psycopg.Connection, geocoded_request_id: str) -> dict:
         return _new_cluster(
             conn, geocoded_request_id, category, summary, "flagged",
             reason or f"clustered alone: {why} for membership checks",
+            commit=commit,
         )
 
     candidates = _candidates(conn, geocoded_request_id, category)
     if not candidates:
         return _new_cluster(conn, geocoded_request_id, category, summary,
-                            confidence, reason)
+                            confidence, reason, commit=commit)
 
     # Ambiguity → highest similarity wins; the rest are logged alternatives.
     (winner_id, winner_sim), rest = candidates[0], candidates[1:]
@@ -136,7 +142,8 @@ def run(conn: psycopg.Connection, geocoded_request_id: str) -> dict:
         "UPDATE demand_clusters SET member_count = member_count + 1 WHERE id = %s",
         (winner_id,),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return {
         "cluster_id": winner_id,
         "membership_id": str(m[0]),
