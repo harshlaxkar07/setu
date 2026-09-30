@@ -45,9 +45,11 @@ from app.constants import (
     WEIGHT_VOLUME,
 )
 from app.stages.fuse import (
+    SCORING_FACILITY_FILTER,
     facility_type_for,
     region_for_cluster,
     resolve_zero_facility_gap,
+    scoring_source,
 )
 
 # Indicator names this stage owns (re-scoring replaces exactly these rows and
@@ -109,14 +111,15 @@ def _nearest_source_m(
     of the type, unbounded by the service radius. None when no facility of the
     type exists anywhere in the register."""
     row = conn.execute(
-        """
+        f"""
         SELECT ST_Distance(f.geom::geography, dc.centroid::geography) AS d
         FROM infrastructure_facilities f, demand_clusters dc
         WHERE dc.id = %s AND f.facility_type = %s AND f.functioning
+          AND {SCORING_FACILITY_FILTER}
         ORDER BY d ASC
         LIMIT 1
         """,
-        (cluster_id, facility_type),
+        (cluster_id, facility_type, scoring_source()),
     ).fetchone()
     return float(row[0]) if row else None
 

@@ -186,6 +186,8 @@ def _validate(raw: str, schema: Type[BaseModel] | None) -> Any:
         text = text.split("```")[1]
         text = text[4:] if text.startswith("json") else text
     try:
-        return schema.model_validate_json(text.strip())
+        # strict=False: models sometimes emit a raw newline inside a string
+        # value; that is still the intended JSON, not malformed output.
+        return schema.model_validate(json.loads(text.strip(), strict=False))
     except Exception as exc:
         raise _ValidationFailed(f"schema-bound output invalid: {exc}") from exc

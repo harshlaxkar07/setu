@@ -145,7 +145,9 @@ def test_service_failure_proceeds_flagged(conn):
     def broken(query):
         raise ConnectionError("nominatim down")
 
-    sr = make_sr(conn)
+    # An unknown place: a KNOWN region now resolves via the database fallback
+    # even with the geocoder down (test_locate_fallback.py, enhancements D8).
+    sr = make_sr(conn, mention="Zzyzx Nowhere")
     gr = locate.run(conn, sr, _transport=broken,
                     _embedder=counting_embedder())
     lon, lat, confidence, reason, _ = geocoded_row(conn, gr)

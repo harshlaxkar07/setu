@@ -19,6 +19,8 @@ import psycopg
 import pytest
 
 from app.constants import (
+    CATEGORY_HEALTH,
+    CATEGORY_ROAD,
     CATEGORY_WATER,
     DEGENERATE_NORM,
     INVESTMENT_DEFICIT,
@@ -33,10 +35,20 @@ DATABASE_URL = os.environ.get(
 
 TOL = 1e-9
 
+# Every seeded equity pair (enhancements task 2.3): category → the urban ward's
+# facility count within radius. The rural village always has 0.
+SEEDED_PAIRS = {
+    CATEGORY_WATER: 10,     # Kothrud vs Velhe (files/04 worked example)
+    CATEGORY_HEALTH: 8,     # Aundh vs Paud
+    CATEGORY_ROAD: 12,      # Hadapsar vs Ghisar
+}
 
-@pytest.fixture(scope="module")
-def seeded():
-    """Seeded water clusters with their latest stored scores, gaps, indicators."""
+
+@pytest.fixture(scope="module", params=list(SEEDED_PAIRS))
+def seeded(request):
+    """A seeded category's two clusters with their latest stored scores, gaps,
+    indicators — (high-volume urban ward, low-volume rural village)."""
+    category = request.param
     with psycopg.connect(DATABASE_URL) as conn:
         rows = conn.execute(
             """
@@ -56,7 +68,7 @@ def seeded():
             WHERE dc.category = %s
             ORDER BY dc.member_count DESC
             """,
-            (CATEGORY_WATER,),
+            (category,),
         ).fetchall()
         assert len(rows) == 2, (
             "seeded demo database with a scored Region A/B pair required — "
@@ -84,6 +96,7 @@ def seeded():
 
     region_a, region_b = unpack(rows[0]), unpack(rows[1])  # by member_count desc
     assert region_a["member_count"] > region_b["member_count"]
+    region_a["category"] = region_b["category"] = category
     return region_a, region_b
 
 
@@ -92,7 +105,8 @@ def seeded():
 # --------------------------------------------------------------------------
 
 def test_equity_invariant(seeded):
-    """STRICT: PriorityScore(Region B) > PriorityScore(Region A) on the seed.
+    """STRICT, for every seeded category: the low-volume underserved village
+    outranks the high-volume well-served ward.
 
     Region A has ~25× the complaint volume; Region B has zero facilities in
     radius and low historical investment. Gap analysis must beat raw counts.
@@ -108,7 +122,7 @@ def test_equity_invariant(seeded):
 def test_seeded_contrast_shape(seeded):
     """The seeded worked example holds: 0 facilities + max gap on Region B."""
     region_a, region_b = seeded
-    assert region_a["facility_count"] == 10
+    assert region_a["facility_count"] == SEEDED_PAIRS[region_a["category"]]
     assert region_b["facility_count"] == 0
     # Zero coverage carries the category's maximum (most severe) gap.
     assert region_b["gap_value"] >= region_a["gap_value"]
@@ -146,7 +160,7 @@ def test_stored_components_match_recomputation_from_indicators(seeded):
     """Normalized components re-derived from the STORED raw evidence — the gap
     rows, the 'historical investment' indicator's deficit value, and the
     'complaint volume' indicator — reproduce the stored norms and score."""
-    clusters = list(seeded)
+    clusters = [c for c in seeded]
 
     raw_gap = [c["gap_value"] for c in clusters]
     raw_deficit = [c["indicators"]["historical investment"][1] for c in clusters]

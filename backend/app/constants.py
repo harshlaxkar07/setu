@@ -42,3 +42,20 @@ WHISPER_MODEL = "small"
 
 # --- Domain -----------------------------------------------------------------
 CATEGORY_WATER = "water_infrastructure"
+CATEGORY_ROAD = "road_infrastructure"
+CATEGORY_HEALTH = "healthcare"
+CATEGORY_OTHER = "other"
+
+# Categories Understand may assign (enhancements design D5). Anything else the
+# model returns is normalised to "other" — never silently invented.
+CATEGORIES = (
+    CATEGORY_WATER,
+    CATEGORY_ROAD,
+    CATEGORY_HEALTH,
+    "electricity",
+    "sanitation",
+    "education",
+    "transportation",
+    "digital_connectivity",
+    CATEGORY_OTHER,
+)

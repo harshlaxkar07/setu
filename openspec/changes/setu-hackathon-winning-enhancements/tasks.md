@@ -9,10 +9,10 @@
 ## 2. Multi-category data and language
 
 - [ ] 2.1 Extend Understand's prompt to enumerate supported categories and label any detected language (D5, D7); verify with fixture-backed tests for a road/ambulance message (road_infrastructure, high urgency) and a Marathi message (detected_language "Marathi")
-- [ ] 2.2 Map healthcare and road categories to facility types in Fuse and extend seed with a healthcare equity pair and a road equity pair plus zero-request villages carrying `vulnerability_index`/`connectivity_index` (migration for the new region columns and `centroid`); verify reseed is idempotent and runs with zero embedding API calls on the second run
-- [ ] 2.3 Parametrise the equity-invariant test over every seeded category; verify it passes for water, healthcare and road
-- [ ] 2.4 Implement the Locate fallback chain (suffix stripping, region-name and facility-name matching, medium confidence with reason) (D8); verify tests showing "वेल्हे गाँव" resolves to Velhe and joins the seeded Velhe cluster
-- [ ] 2.5 Add `db/seed/import_osm.py` (D6) and `SCORING_DATASET` selection in Fuse; verify with a recorded Overpass response that a labelled dataset is created in one transaction, seeded scores are unchanged by default, and a network failure leaves no partial dataset
+- [x] 2.2 Map healthcare and road categories to facility types in Fuse and extend seed with a healthcare equity pair and a road equity pair plus zero-request villages carrying `vulnerability_index`/`connectivity_index` (migration for the new region columns and `centroid`); verify reseed is idempotent and runs with zero embedding API calls on the second run
+- [x] 2.3 Parametrise the equity-invariant test over every seeded category; verify it passes for water, healthcare and road
+- [x] 2.4 Implement the Locate fallback chain (suffix stripping, region-name and facility-name matching, medium confidence with reason) (D8); verify tests showing "वेल्हे गाँव" resolves to Velhe and joins the seeded Velhe cluster
+- [x] 2.5 Add `db/seed/import_osm.py` (D6) and `SCORING_DATASET` selection in Fuse; verify with a recorded Overpass response that a labelled dataset is created in one transaction, seeded scores are unchanged by default, and a network failure leaves no partial dataset
 
 ## 3. Trust and anti-manipulation
 

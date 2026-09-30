@@ -67,3 +67,15 @@ def test_replay_keys_are_stage_and_input_scoped(fixture_dir, monkeypatch):
     boom = lambda p, image_bytes=None: (_ for _ in ()).throw(RuntimeError("live!"))
     assert gemini.call_gemini("stage_a", "same prompt", _caller=boom) == "A"
     assert gemini.call_gemini("stage_b", "same prompt", _caller=boom) == "B"
+
+
+def test_raw_newline_inside_json_string_is_accepted(fixture_dir):
+    """Gemini occasionally breaks a string value across lines; the payload is
+    still the intended JSON and must validate (observed live, 2026-09-30)."""
+    raw = '{\n  "name": "line one\nline two"\n}'
+
+    class Named(BaseModel):
+        name: str
+
+    out = gemini.call_gemini("demo", "p", schema=Named, _caller=lambda p, i: raw)
+    assert out.name == "line one\nline two"

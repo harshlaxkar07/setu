@@ -38,6 +38,7 @@ services:
       LLM_MODEL: ${LLM_MODEL:-}
       EMBED_MODEL: ${EMBED_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      SCORING_DATASET: ${SCORING_DATASET:-synthetic}
       WHISPER_MODEL_DIR: /models
       MEDIA_DIR: /media
       CITIZEN_WEB_DIR: /app/citizen-web

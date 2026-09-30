@@ -32,6 +32,8 @@ import psycopg
 
 sys.path.insert(0, "/app")  # backend container: app package + mounted seed dir
 from app.constants import (  # noqa: E402
+    CATEGORY_HEALTH,
+    CATEGORY_ROAD,
     CATEGORY_WATER,
     EMBEDDING_DIM,
     SERVICE_RADIUS_M,
@@ -62,6 +64,78 @@ TEMPLATES = [
     "{place} में पानी गंदा आ रहा है, पीने लायक़ नहीं है।",
 ]
 SUMMARY = "Drinking water supply inadequate or absent in {place} for weeks"
+
+# --- enhancements: healthcare + road equity pairs and silent villages -------
+# (enhancements design D3/D5). Coordinates verified against Nominatim
+# 2026-09-30. Each category mirrors the water worked example: a high-volume,
+# well-served urban ward vs a low-volume, underserved rural village. Silent
+# villages have NO requests at all — they exist only in the region data.
+# vulnerability/connectivity are synthetic 0..1 context indices.
+EXTRA_REGIONS = [
+    # name,     lat,        lon,        population, investment, settlement, vuln, conn
+    ("Aundh",    18.5618834, 73.8101957, 120000, "high", "urban", 0.20, 0.90),
+    ("Paud",     18.5242717, 73.6155138,   6000, "low",  "rural", 0.70, 0.35),
+    ("Hadapsar", 18.5007741, 73.9379146, 250000, "high", "urban", 0.30, 0.85),
+    ("Ghisar",   18.2926017, 73.5582518,   2500, "low",  "rural", 0.75, 0.25),
+    ("Kurunji",  18.2194053, 73.7165880,   3200, "low",  "rural", 0.80, 0.20),
+    ("Pabe",     18.3213235, 73.6651950,   4100, "low",  "rural", 0.72, 0.30),
+    ("Tamhini",  18.4388230, 73.4395128,   1900, "low",  "rural", 0.85, 0.15),
+]
+# Devanagari / alternate spellings, matched by Locate's region fallback.
+REGION_ALIASES = {
+    "Kothrud": ["कोथरूड", "Kothrud"], "Velhe": ["वेल्हे", "वेल्हा", "Velha", "Vélhe"],
+    "Aundh": ["औंध"], "Paud": ["पौड", "Poud"], "Hadapsar": ["हडपसर"],
+    "Ghisar": ["घिसर"], "Kurunji": ["कुरुंजी", "Kurunjee"], "Pabe": ["पाबे"],
+    "Tamhini": ["ताम्हिणी", "ताम्हिनी"],
+}
+# Context indices for the original worked-example regions.
+BASE_REGION_CONTEXT = {"Kothrud": ("urban", 0.15, 0.92), "Velhe": ("rural", 0.68, 0.30)}
+
+# Facilities per (region, facility_type): urban wards are served in every
+# category; the rural pair villages lack their own category's facility.
+EXTRA_FACILITIES = {
+    ("Kothrud", "health_facility"): 7, ("Kothrud", "road_access_point"): 9,
+    ("Aundh", "health_facility"): 8, ("Aundh", "water_point"): 9,
+    ("Aundh", "road_access_point"): 8,
+    ("Hadapsar", "road_access_point"): 12, ("Hadapsar", "water_point"): 11,
+    ("Hadapsar", "health_facility"): 6,
+    # Velhe and Ghisar are ~2.9 km apart (< 2 × service radius): neither gets
+    # a facility of the other's pair category, or it could land inside the
+    # other's radius and break the worked example.
+    ("Velhe", "health_facility"): 1,
+    ("Paud", "water_point"): 2, ("Paud", "road_access_point"): 1,
+}
+FACILITY_LABEL = {"health_facility": "Health Centre", "water_point": "Water Point",
+                  "road_access_point": "Road Access Point"}
+
+# (category, urban ward, n, rural village, n) — the equity pairs.
+EXTRA_PAIRS = [
+    (CATEGORY_HEALTH, "Aundh", 300, "Paud", 15),
+    (CATEGORY_ROAD, "Hadapsar", 400, "Ghisar", 12),
+]
+# No {n} placeholders: few unique texts, so few embedding calls.
+CATEGORY_TEMPLATES = {
+    CATEGORY_HEALTH: [
+        "{place} में पास में कोई अस्पताल नहीं है, इलाज के लिए बहुत दूर जाना पड़ता है।",
+        "{place} के स्वास्थ्य केंद्र में डॉक्टर नहीं आते, दवाइयाँ भी नहीं मिलतीं।",
+        "{place} me koi clinic nahi hai, bimar logon ko shahar le jana padta hai.",
+        "{place} मध्ये दवाखाना नाही, उपचारासाठी खूप लांब जावे लागते.",
+        "Hospital {place} se bahut door hai, delivery ke time bahut dikkat hoti hai.",
+        "{place} में रात को कोई डॉक्टर नहीं मिलता, एम्बुलेंस भी देर से आती है।",
+    ],
+    CATEGORY_ROAD: [
+        "{place} की सड़क महीनों से टूटी है, एम्बुलेंस भी ठीक से नहीं आ पाती।",
+        "{place} me road bahut kharab hai, baarish me poora rasta band ho jata hai.",
+        "{place} मधला रस्ता पूर्ण खराब झाला आहे, शाळेत जायला मुलांना त्रास होतो.",
+        "{place} की सड़क पर बड़े गड्ढे हैं, रोज़ दुर्घटना का ख़तरा रहता है।",
+        "Monsoon me {place} ka rasta toot jata hai, gaon se bahar nikalna mushkil hai.",
+        "{place} तक पक्की सड़क नहीं है, बस भी नहीं आती।",
+    ],
+}
+CATEGORY_SUMMARY = {
+    CATEGORY_HEALTH: "No accessible health facility or doctor available in {place}",
+    CATEGORY_ROAD: "Road to {place} damaged, blocking emergency and daily access",
+}
 
 
 def jitter(lat: float, lon: float, max_m: float) -> tuple[float, float]:
@@ -180,6 +254,16 @@ def main() -> int:
         (place_b, rb["lon"], rb["lat"], 4800, "low", ds_pop),
     )
 
+    # Context attributes for the worked-example regions (enhancements D3).
+    for name, (settlement, vuln, conn_idx) in BASE_REGION_CONTEXT.items():
+        cur.execute(
+            """UPDATE region_profiles
+                  SET centroid = ST_Centroid(boundary), settlement_type = %s,
+                      vulnerability_index = %s, connectivity_index = %s
+                WHERE name = %s""",
+            (settlement, vuln, conn_idx, name),
+        )
+
     # --- facilities (task 2.3) ----------------------------------------------
     print("Seeding facilities: 10 in Region A radius, 0 in Region B ...")
     for _ in range(10):
@@ -258,6 +342,10 @@ def main() -> int:
          N_REGION_B, json.dumps([{"dataset": "seed", "note": "files/04 worked example"}])),
     )
 
+    seed_enhancement_regions(cur, ds_pop, ds_fac)
+    for name, aliases in REGION_ALIASES.items():
+        cur.execute("UPDATE region_profiles SET aliases = %s WHERE name = %s",
+                    (aliases, name))
     conn.commit()
 
     # --- Fuse/Score pass (task 2.7) — once the stages exist ------------------
@@ -269,6 +357,13 @@ def main() -> int:
             for cid in cluster_ids.values():
                 fuse_cluster(c2, cid)
             score_category(c2, CATEGORY_WATER)
+            # Enhancement categories: every cluster of each, then its scores.
+            for category, *_ in EXTRA_PAIRS:
+                for (cid,) in c2.execute(
+                        "SELECT id FROM demand_clusters WHERE category = %s",
+                        (category,)).fetchall():
+                    fuse_cluster(c2, cid)
+                score_category(c2, category)
             c2.commit()
         scored = True
     except ImportError:
@@ -278,12 +373,109 @@ def main() -> int:
     print("\nSeed complete:")
     print(f"  Region A ({place_a}): {N_REGION_A} requests, 10 facilities, investment=high")
     print(f"  Region B ({place_b}): {N_REGION_B} requests, 0 facilities, investment=low")
+    for category, urban, n_u, rural, n_r in EXTRA_PAIRS:
+        print(f"  {category}: {urban} {n_u} requests vs {rural} {n_r} requests")
+    print(f"  Silent villages (no requests): "
+          f"{', '.join(r[0] for r in EXTRA_REGIONS[4:])}")
     if embeddings is None:
         print("  EMBEDDINGS MISSING — set GEMINI_API_KEY and re-run (task 2.5).")
         return 2
     if not scored:
         return 0
     return 0
+
+
+def seed_enhancement_regions(cur, ds_pop, ds_fac) -> None:
+    """Healthcare/road equity pairs, silent villages, named facilities
+    (enhancements task 2.2). Runs after the water worked example so the
+    original RNG sequence — and its cached embeddings — are unchanged."""
+    print("Seeding healthcare/road pairs and silent villages ...")
+    centres = {}
+    for name, lat, lon, pop, inv, settlement, vuln, conn_idx in EXTRA_REGIONS:
+        cur.execute(
+            """INSERT INTO region_profiles
+                 (name, boundary, centroid, population, investment_label,
+                  dataset_id, settlement_type, vulnerability_index,
+                  connectivity_index)
+               VALUES (%s,
+                 ST_Buffer(ST_SetSRID(ST_MakePoint(%s,%s),4326)::geography, 2500)::geometry,
+                 ST_SetSRID(ST_MakePoint(%s,%s),4326), %s, %s, %s, %s, %s, %s)""",
+            (name, lon, lat, lon, lat, pop, inv, ds_pop, settlement, vuln, conn_idx),
+        )
+        centres[name] = {"lat": lat, "lon": lon}
+    for place in ("Kothrud", "Velhe"):
+        key = "region_a" if place == "Kothrud" else "region_b"
+        centres[place] = LOCATIONS[key]
+
+    for (place, ftype), count in EXTRA_FACILITIES.items():
+        c = centres[place]
+        for i in range(count):
+            lat, lon = jitter(c["lat"], c["lon"], SERVICE_RADIUS_M * 0.8)
+            cur.execute(
+                """INSERT INTO infrastructure_facilities
+                     (dataset_id, facility_type, geom, functioning, name)
+                   VALUES (%s, %s, ST_SetSRID(ST_MakePoint(%s,%s),4326), true, %s)""",
+                (ds_fac, ftype, lon, lat, f"{place} {FACILITY_LABEL[ftype]} {i + 1}"),
+            )
+
+    pair_reqs = []
+    for category, urban, n_urban, rural, n_rural in EXTRA_PAIRS:
+        for place, n in ((urban, n_urban), (rural, n_rural)):
+            reqs = []
+            for i in range(n):
+                text = RNG.choice(CATEGORY_TEMPLATES[category]).format(place=place)
+                lat, lon = jitter(centres[place]["lat"], centres[place]["lon"], 1200)
+                reqs.append({
+                    "text": text, "lat": lat, "lon": lon,
+                    "submitter": f"seed-{category[:6]}-{place.lower()}-{i:04d}",
+                    "language": ("Hinglish" if text[0].isascii() else
+                                 "Marathi" if any(w in text for w in ("मध्ये", "मधला", "आहे"))
+                                 else "Hindi"),
+                })
+            pair_reqs.append((category, place, reqs))
+
+    embeddings = embed_texts([r["text"] for _, _, reqs in pair_reqs for r in reqs])
+    for category, place, reqs in pair_reqs:
+        summary = CATEGORY_SUMMARY[category].format(place=place)
+        cur.execute(
+            """INSERT INTO demand_clusters
+                 (category, centroid, representative_summary, member_count,
+                  status, confidence)
+               VALUES (%s, ST_SetSRID(ST_MakePoint(%s,%s),4326), %s, %s, 'active', 'high')
+               RETURNING id""",
+            (category, centres[place]["lon"], centres[place]["lat"], summary, len(reqs)),
+        )
+        cluster_id = cur.fetchone()[0]
+        for r in reqs:
+            cur.execute(
+                """INSERT INTO citizen_requests (channel, raw_text, submitter_ref)
+                   VALUES ('text', %s, %s) RETURNING id""",
+                (r["text"], r["submitter"]),
+            )
+            cr_id = cur.fetchone()[0]
+            cur.execute(
+                """INSERT INTO structured_requests
+                     (citizen_request_id, category, urgency, summary,
+                      detected_language, raw_location_mention)
+                   VALUES (%s, %s, 'high', %s, %s, %s) RETURNING id""",
+                (cr_id, category, summary, r["language"], place),
+            )
+            sr_id = cur.fetchone()[0]
+            vec = embeddings.get(r["text"]) if embeddings else None
+            cur.execute(
+                """INSERT INTO geocoded_requests
+                     (structured_request_id, geom, confidence, embedding)
+                   VALUES (%s, ST_SetSRID(ST_MakePoint(%s,%s),4326), 'high', %s)
+                   RETURNING id""",
+                (sr_id, r["lon"], r["lat"], vec),
+            )
+            gr_id = cur.fetchone()[0]
+            cur.execute(
+                """INSERT INTO cluster_memberships
+                     (geocoded_request_id, demand_cluster_id, similarity_score)
+                   VALUES (%s, %s, %s)""",
+                (gr_id, cluster_id, round(0.86 + RNG.random() * 0.1, 4)),
+            )
 
 
 if __name__ == "__main__":

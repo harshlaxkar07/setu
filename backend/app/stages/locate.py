@@ -131,9 +131,16 @@ def _live_embedder(text: str) -> list[float]:
 
 def _embedding_for(text: str, embedder) -> list[float] | None:
     """Vector for `text`, from cache when available (zero API calls on a
-    rehearsal or restart); a genuinely new text costs exactly one call."""
+    rehearsal or restart); a genuinely new text costs exactly one call.
+
+    The cache is keyed on, and stores, the PII-masked text: it lives in the
+    fixture store (committed for demo replay), so raw identifiers must never
+    reach it (enhancements design D13). PII-free texts keep their old keys.
+    """
     if not text:
         return None
+    from app import pii
+    text = pii.mask(text)[0]
     cache = _embed_cache_path(text)
     if cache.exists():
         return json.loads(cache.read_text())["embedding"]
@@ -177,6 +184,81 @@ def _assess(results: list[dict]) -> tuple[dict | None, str, str | None]:
     return best, "high", None
 
 
+# --- informal-location fallbacks (enhancements design D8) ---------------------
+
+# Generic words around a place name that stop geocoders matching it:
+# "वेल्हे गाँव", "Velhe village", "Paud gaon", "वेल्हे मध्ये".
+_SUFFIX_WORDS = re.compile(
+    r"\b(?:village|gaon|gaav|gav|gaanv|ward\s*(?:no\.?\s*)?\d+|me|mein|madhe)\b"
+    r"|(?:गाँव|गांव|गाव|गावात|ग्राम|में|मध्ये|मधील|वार्ड\s*\d+)",
+    re.IGNORECASE,
+)
+
+
+def strip_place_suffixes(mention: str) -> str:
+    """The mention with generic village/ward/postposition words removed."""
+    out = _SUFFIX_WORDS.sub(" ", mention)
+    return re.sub(r"\s+", " ", out).strip(" ,.-।")
+
+
+def _match_region(conn: psycopg.Connection, text: str):
+    """(lon, lat, name) of a known region whose name or alias appears in text."""
+    row = conn.execute(
+        """SELECT ST_X(c), ST_Y(c), name FROM (
+               SELECT COALESCE(centroid, ST_Centroid(boundary)) AS c, name,
+                      array_prepend(name, aliases) AS names
+               FROM region_profiles) r
+           WHERE EXISTS (SELECT 1 FROM unnest(r.names) n
+                         WHERE length(n) >= 3 AND %s ILIKE '%%' || n || '%%')
+           ORDER BY name LIMIT 1""",
+        (text,),
+    ).fetchone()
+    return row
+
+
+def _match_facility(conn: psycopg.Connection, text: str):
+    """(lon, lat, name) of a named facility/landmark matching the text."""
+    if len(text) < 4:
+        return None
+    return conn.execute(
+        """SELECT ST_X(geom), ST_Y(geom), name FROM infrastructure_facilities
+           WHERE name IS NOT NULL
+             AND (%s ILIKE '%%' || name || '%%' OR name ILIKE '%%' || %s || '%%')
+           ORDER BY length(name) DESC LIMIT 1""",
+        (text, text),
+    ).fetchone()
+
+
+def _fallback_locate(conn: psycopg.Connection, mention: str, transport, *,
+                     try_geocoder: bool):
+    """(lon, lat, reason) from the fallback chain, or None:
+    geocoder on the suffix-stripped mention → known region names/aliases →
+    named facilities/landmarks."""
+    stripped = strip_place_suffixes(mention)
+    if try_geocoder and stripped and stripped != mention.strip():
+        try:
+            best, _, _ = _assess(_geocode(compose_query(stripped), transport))
+            if best is not None:
+                return (float(best["lon"]), float(best["lat"]),
+                        f"resolved via fallback: suffix-stripped mention "
+                        f"'{stripped}' geocoded")
+        except Exception:
+            pass  # the database fallbacks below still apply
+    for text in dict.fromkeys((mention, stripped)):
+        if not text:
+            continue
+        region = _match_region(conn, text)
+        if region is not None:
+            return (region[0], region[1],
+                    f"resolved via fallback: matched known region '{region[2]}'")
+    for text in dict.fromkeys((stripped, mention)):
+        facility = _match_facility(conn, text) if text else None
+        if facility is not None:
+            return (facility[0], facility[1],
+                    f"resolved via fallback: matched landmark '{facility[2]}'")
+    return None
+
+
 def run(conn: psycopg.Connection, structured_request_id: str, *,
         _transport=None, _embedder=None) -> str:
     """Produce a GeocodedRequest; returns geocoded_request_id.
@@ -207,13 +289,24 @@ def run(conn: psycopg.Connection, structured_request_id: str, *,
     if not (mention or "").strip():
         confidence, reason = "flagged", "no location mention in the request"
     else:
+        service_down = False
         try:
             results = _geocode(compose_query(mention), transport)
             best, confidence, reason = _assess(results)
             if best is not None:
                 lon, lat = float(best["lon"]), float(best["lat"])
         except Exception as exc:  # service down / timeout — flag, never drop
+            service_down = True
             confidence, reason = "flagged", f"geocoding service unavailable: {exc}"
+        if lon is None:
+            # Informal-location fallbacks (enhancements design D8). Each one
+            # resolves at medium confidence with the fallback named.
+            found = _fallback_locate(conn, mention, transport,
+                                     try_geocoder=not service_down)
+            if found is not None:
+                lon, lat, fallback_reason = found
+                confidence = "medium"
+                reason = f"{fallback_reason} (original: {reason})"
 
     # -- embedding (cached; the citizen's own words, matching the seed) -------
     embed_text = raw_text or transcription or summary
