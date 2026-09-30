@@ -42,6 +42,19 @@ def header_bar() -> str:
     )
 
 
+def summary_strip(items: list[tuple[str, int, str | None]]) -> str:
+    """At-a-glance counts under the header: (label, value, accent) tiles.
+    Accent ("high" / "pending") marks tiles that need attention."""
+    tiles = []
+    for label, value, accent in items:
+        cls = f" kpi-{accent}" if accent else ""
+        tiles.append(
+            f'<div class="kpi{cls}"><div class="kpi-value">{num(value)}</div>'
+            f'<div class="kpi-label">{esc(label)}</div></div>'
+        )
+    return f'<div class="kpi-strip">{"".join(tiles)}</div>'
+
+
 def tier_badge(tier: str | None) -> str:
     """Priority tier: color + glyph + text label — never color-only."""
     if tier is None:

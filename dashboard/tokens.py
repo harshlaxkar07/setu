@@ -69,7 +69,7 @@ html, body, [data-testid="stAppViewContainer"], .stApp {{
   color: var(--ink);
   font-family: 'Inter', system-ui, sans-serif;
 }}
-.block-container {{ padding: 24px 32px 32px 32px; max-width: 1600px; }}
+.block-container {{ padding: 24px 32px 32px 32px !important; max-width: 1600px; }}
 h1, h2, h3, h4, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {{
   font-family: 'Inter', system-ui, sans-serif; color: var(--ink);
 }}
@@ -88,7 +88,7 @@ p, li, label, .stMarkdown {{ color: var(--ink); }}
 .setu-header {{
   background: linear-gradient(90deg, var(--bridge-blue-deep), var(--bridge-blue));
   color: #FFFFFF; border-radius: 12px;
-  padding: 16px 24px; margin-bottom: 24px;
+  padding: 16px 24px; margin-bottom: 16px;
   display: flex; align-items: baseline; gap: 16px;
 }}
 .setu-header .mark {{ font-size: 22px; font-weight: 700; letter-spacing: 0.3px; }}
@@ -178,5 +178,29 @@ p, li, label, .stMarkdown {{ color: var(--ink); }}
 [data-testid="stExpander"] summary {{ font-weight: 600; color: var(--ink); }}
 
 .section-title {{ font-size: 16px; font-weight: 700; margin: 24px 0 8px 0; }}
+.section-sub {{ font-weight: 500; color: var(--ink-2); }}
+
+/* ---- summary strip ------------------------------------------------------ */
+.kpi-strip {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+              gap: 16px; margin-bottom: 8px; }}
+.kpi {{ background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+        padding: 12px 16px; }}
+.kpi-value {{ font-size: 24px; font-weight: 600; line-height: 1.2; }}
+.kpi-label {{ font-size: 12px; color: var(--ink-2); margin-top: 2px; }}
+.kpi-high {{ border-left: 4px solid var(--priority-high); }}
+.kpi-high .kpi-value {{ color: var(--priority-high); }}
+.kpi-pending {{ border-left: 4px solid var(--pending-gate); }}
+.kpi-pending .kpi-value {{ color: var(--pending-gate); }}
+@media (max-width: 900px) {{
+  .kpi-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+}}
+
+/* ---- tabs: section navigation ------------------------------------------- */
+.stTabs [data-baseweb="tab-list"] {{ gap: 8px; border-bottom: 1px solid var(--line); }}
+.stTabs [data-baseweb="tab"] {{ font-family: 'Inter', sans-serif; font-weight: 600;
+                                 font-size: 14px; padding: 8px 16px; color: var(--ink-2); }}
+.stTabs [aria-selected="true"] {{ color: var(--bridge-blue) !important; }}
+.stTabs [data-baseweb="tab-highlight"] {{ background-color: var(--bridge-blue) !important; }}
+.stTabs [data-baseweb="tab"] p {{ font-weight: 600; font-size: 14px; }}
 .small-note {{ color: var(--ink-3); font-size: 12px; }}
 """

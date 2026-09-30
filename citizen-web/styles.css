@@ -71,6 +71,35 @@ html, body {
 .header-text .hi { font-weight: 700; font-size: 18px; }
 .header-text .en { font-family: var(--font-en); font-size: 12.5px; color: var(--ink-2); }
 
+/* privacy reassurance: no name or phone number, ever */
+.anon-pill {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  background: var(--warm-soft);
+  color: var(--warm-deep);
+  line-height: 1.2;
+}
+
+.anon-pill .hi { font-size: 13px; font-weight: 600; }
+.anon-pill .en { font-family: var(--font-en); font-size: 10.5px; }
+
+/* On wider screens the chat reads as a framed phone app, not a bare column. */
+@media (min-width: 640px) {
+  body { padding: 24px 16px; }
+  .app {
+    height: calc(100dvh - 48px);
+    max-height: 860px;
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(23, 33, 43, 0.08);
+  }
+}
+
 /* ------------------------------------------------------------------ chat */
 
 .chat {
@@ -159,6 +188,36 @@ html, body {
   font-size: 11px;
   color: var(--ink-3);
 }
+
+/* topic chips inside the welcome bubble: tap to start a typed message */
+.topic-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.topic-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--touch);
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-hi);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.topic-chip:hover { border-color: var(--warm); }
+.topic-chip:active { background: var(--warm-soft); }
+.topic-chip .topic-label { display: flex; flex-direction: column; line-height: 1.25; }
+.topic-chip .en-sub { margin: 0; font-size: 11px; }
 
 /* receipt bubble: the citizen's trust signal */
 .receipt-title { font-weight: 700; }

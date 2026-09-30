@@ -576,10 +576,46 @@ async function sendVerificationVoice(clusterId, blob) {
 
 // ------------------------------------------------------------------ boot
 
-systemBubble(
+const welcomeEl = systemBubble(
   "नमस्ते! पानी, सड़क या बिजली की समस्या हो तो माइक दबाकर बोलिए, या नीचे लिखिए। आपका नाम या फ़ोन नंबर नहीं पूछा जाएगा।",
   "Namaste! Press and hold the mic to describe a water, road or electricity problem — or type below. We never ask your name or phone number."
 );
+
+// Topic chips: one tap starts a typed message with the topic already named.
+// They only prefill the input — nothing is sent until the citizen presses send.
+const TOPICS = [
+  ["💧", "पानी", "Water", "पानी की समस्या: "],
+  ["🛣️", "सड़क", "Road", "सड़क की समस्या: "],
+  ["⚡", "बिजली", "Electricity", "बिजली की समस्या: "],
+  ["🧹", "सफ़ाई", "Sanitation", "सफ़ाई की समस्या: "],
+];
+const topicRow = document.createElement("div");
+topicRow.className = "topic-row";
+for (const [icon, hi, en, prefix] of TOPICS) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "topic-chip";
+  btn.setAttribute("aria-label", `${hi} / ${en}`);
+  const iconEl = document.createElement("span");
+  iconEl.setAttribute("aria-hidden", "true");
+  iconEl.textContent = icon;
+  const labelEl = document.createElement("span");
+  labelEl.className = "topic-label";
+  const hiEl = document.createElement("span");
+  hiEl.textContent = hi;
+  const enEl = document.createElement("span");
+  enEl.className = "en-sub";
+  enEl.textContent = en;
+  labelEl.append(hiEl, enEl);
+  btn.append(iconEl, labelEl);
+  btn.addEventListener("click", () => {
+    inputEl.value = prefix;
+    inputEl.focus();
+    inputEl.setSelectionRange(prefix.length, prefix.length);
+  });
+  topicRow.appendChild(btn);
+}
+welcomeEl.appendChild(topicRow);
 
 // Reopening the conversation: check the last request's status once (and keep
 // watching) so a prompt for a since-resolved cluster appears (verification
