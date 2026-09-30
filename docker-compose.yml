@@ -59,6 +59,8 @@ services:
       - ./db/seed:/app/seed
       # Additive schema migrations, applied at backend startup (enhancements D1).
       - ./db/migrations:/app/migrations:ro
+      # Operator/demo scripts (spam attack, share tunnel helpers) for tests.
+      - ./scripts:/app/scripts:ro
     depends_on:
       db:
         condition: service_healthy

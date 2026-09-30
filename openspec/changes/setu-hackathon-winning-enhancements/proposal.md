@@ -36,6 +36,7 @@ Locked decisions are preserved: the Publish Gate remains the only path to public
 - `privacy-governance`: PII masking before LLM calls, hash-chained approval log, configured reviewer accounts.
 - `llm-provider-abstraction`: provider interface with Gemini and OpenAI-compatible implementations.
 - `evaluation-harness`: labelled evaluation set, accuracy report, and scale test.
+- `gate-consolidation`: at most one recommendation awaiting review per cluster; later reports join it (added during implementation: without it every report drafts its own recommendation, so spam or many judges would flood the gate and the AI quota).
 
 ### Modified Capabilities
 

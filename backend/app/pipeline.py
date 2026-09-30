@@ -47,6 +47,7 @@ class PipelineState(TypedDict, total=False):
     recommendation_id: str
     trace_id: str
     thread_id: str
+    joined: bool  # joined the cluster's already-pending recommendation (D19)
     gate_resolution: dict  # {"decision": ..., "reviewer": ...} after resume
 
 
@@ -125,15 +126,37 @@ def _score(state: PipelineState) -> dict:
 
 
 def _recommend(state: PipelineState) -> dict:
+    """Draft a recommendation — unless the cluster already has one awaiting
+    review, in which case this run joins it and ends (enhancements D19: one
+    Publish Gate item per cluster, no redundant model call)."""
     with db.pool.connection() as conn:
         with trace.traced_stage(conn, state["trace_id"], "Recommend",
                                 input_ref=state["cluster_id"]) as e:
+            # Serialise drafting per cluster: concurrent reports cannot open
+            # two gate items (released when this transaction commits).
+            conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 19))",
+                         (state["cluster_id"],))
+            pending = conn.execute(
+                """SELECT id::text FROM recommendations
+                   WHERE demand_cluster_id = %s AND status = 'pending'
+                     AND thread_id IS NOT NULL
+                   ORDER BY created_at DESC LIMIT 1""",
+                (state["cluster_id"],),
+            ).fetchone()
+            if pending is not None:
+                conn.execute(
+                    "UPDATE run_traces SET joined_recommendation_id = %s WHERE id = %s",
+                    (pending[0], state["trace_id"]))
+                conn.commit()
+                e["output_ref"] = pending[0]
+                e["joined_existing"] = True
+                return {"recommendation_id": pending[0], "joined": True}
             rec_id = recommend_stage.run(
                 conn, state["cluster_id"], thread_id=state["thread_id"],
             )
             conn.commit()
             e["output_ref"] = rec_id
-    return {"recommendation_id": rec_id}
+    return {"recommendation_id": rec_id, "joined": False}
 
 
 def _publish_gate(state: PipelineState) -> dict:
@@ -185,6 +208,11 @@ def _finalize(state: PipelineState) -> dict:
             conn.execute(
                 "UPDATE run_traces SET status=%s WHERE id=%s",
                 (run_status, state["trace_id"]))
+            # Runs that joined this recommendation settle with it (D19).
+            conn.execute(
+                """UPDATE run_traces SET status=%s
+                   WHERE joined_recommendation_id=%s""",
+                (run_status, rec_id))
             conn.commit()
             e["output_ref"] = f"approval:{decision} by {reviewer}"
     return {}
@@ -210,7 +238,11 @@ def _build_graph():
     g.add_edge("trust", "fuse")
     g.add_edge("fuse", "score")
     g.add_edge("score", "recommend")
-    g.add_edge("recommend", "publish_gate")
+    g.add_conditional_edges(
+        "recommend",
+        lambda s: END if s.get("joined") else "publish_gate",
+        {END: END, "publish_gate": "publish_gate"},
+    )
     g.add_edge("publish_gate", "finalize")
     g.add_edge("finalize", END)
     return g

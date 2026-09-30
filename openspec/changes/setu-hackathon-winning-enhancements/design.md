@@ -88,6 +88,10 @@ Reviewers come from `REVIEWERS` in `.env` (`name:scrypt-hash` pairs; a helper sc
 ### D18 — Live judge access is an explicit operator script
 `scripts/share.sh` runs a Cloudflare quick tunnel to the backend and prints the URL and a QR code. It is never started by compose. Documented with the privacy implications.
 
+### D19 — One pending recommendation per cluster (decided during implementation)
+The MVP drafts a recommendation and opens a gate item for every request. The Recommend node now takes a transaction-scoped advisory lock on the cluster, checks for a `pending` recommendation, and either drafts one (→ Publish Gate, as before) or records `joined` with the existing id (→ END). `run_traces.joined_recommendation_id` links joined runs; the finalize node applies the decision's run status to them in its single transaction. `needs_revision`, `approved` and `rejected` all count as decided, so the next report drafts afresh.
+*Alternatives*: keep one per request (floods gate and quota); redraft the pending item on each report (one AI call per request, draft churns under the reviewer).
+
 ## Risks / Trade-offs
 
 - [Trust rules produce false positives on genuine mass events (e.g., a real outage)] → flags never delete; reviewers can clear; the dashboard shows total and counted volume side by side; thresholds are constants tuned on the seed.

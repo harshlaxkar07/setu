@@ -297,6 +297,12 @@ def cleanup_test_state() -> None:
             "DELETE FROM citizen_requests WHERE submitter_ref LIKE 'test-%'")
         conn.execute(
             "ALTER TABLE citizen_requests ENABLE TRIGGER citizen_requests_immutable")
+        # Member counts must match memberships again before re-scoring, or the
+        # volume indicator would be computed from a stale total.
+        conn.execute(
+            """UPDATE demand_clusters c SET member_count =
+                 (SELECT count(*) FROM cluster_memberships m
+                  WHERE m.demand_cluster_id = c.id)""")
         conn.commit()
         for (cid,) in conn.execute(
             "SELECT id::text FROM demand_clusters WHERE category = %s",

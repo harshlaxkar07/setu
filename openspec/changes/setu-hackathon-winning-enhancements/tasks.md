@@ -19,7 +19,8 @@
 - [x] 3.1 Migration for `trust_flags`; implement the three rules as a `trust` stage and insert the node between cluster and fuse in the graph (D2); verify unit tests per rule including the "5 similar complaints over 5 days are not flagged" negative case
 - [x] 3.2 Make the Score stage's complaint-volume indicator count only unflagged requests and expose `counted_volume` in cluster APIs; verify a test where injected flagged requests leave the PriorityScore unchanged, and the formula-consistency and equity tests still pass
 - [x] 3.3 Add trust review endpoints (clear/confirm) recording reviewer and time; verify clearing restores the request to counted volume on the next scoring run
-- [ ] 3.4 Add `scripts/spam_attack.py` submitting through the public intake API; verify running it with 300 requests against Kothrud produces flags visible via the cluster API and does not change Kothrud's rank
+- [x] 3.5 One pending recommendation per cluster (D19): advisory-locked check in the Recommend node, `joined` path to END, `run_traces.joined_recommendation_id`, finalize settles joined runs; verify pipeline tests that a second request joins without a model call, approval publishes all joined traces, a post-revision request drafts afresh, and two concurrent runs yield one draft
+- [x] 3.4 Add `scripts/spam_attack.py` submitting through the public intake API; verify running it with 300 requests against Kothrud produces flags visible via the cluster API and does not change Kothrud's rank
 
 ## 4. Privacy and governance
 
