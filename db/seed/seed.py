@@ -207,7 +207,7 @@ def main() -> int:
     # trigger transiently — the ONLY sanctioned mutation path, seed-time only.
     cur.execute("ALTER TABLE citizen_requests DISABLE TRIGGER citizen_requests_immutable")
     cur.execute("""
-        TRUNCATE approvals, recommendations, priority_scores, priority_indicators,
+        TRUNCATE decision_log, trust_flags, approvals, recommendations, priority_scores, priority_indicators,
                  gap_scores, verification_records, run_traces, cluster_memberships,
                  demand_clusters, geocoded_requests, structured_requests,
                  transcriptions, citizen_requests, infrastructure_facilities,

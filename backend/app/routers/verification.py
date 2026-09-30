@@ -21,12 +21,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import (APIRouter, BackgroundTasks, File, Form, HTTPException,
-                     UploadFile)
+from fastapi import (APIRouter, BackgroundTasks, Depends, File, Form,
+                     HTTPException, UploadFile)
 from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
 
-from app import db
+from app import audit, auth, db
 from app.stages import verify as verify_stage
 from app.stages.verify import RESOLVED_STATES
 
@@ -185,11 +185,12 @@ def list_verifications(flagged: bool | None = None) -> list[dict[str, Any]]:
 
 class ReviewBody(BaseModel):
     decision: Literal["confirm_resolved", "reject_resolution"]
-    reviewer: str = Field(min_length=1, max_length=200)
+    reviewer: str | None = Field(default=None, max_length=200)  # ignored (D15)
 
 
 @router.post("/verifications/{record_id}/review")
-def review_verification(record_id: str, body: ReviewBody) -> dict[str, Any]:
+def review_verification(record_id: str, body: ReviewBody,
+                        reviewer: str = Depends(auth.require_reviewer)) -> dict[str, Any]:
     """Record the human review decision — the only path that resolves a flag.
 
     confirm_resolved → cluster becomes resolved_verified;
@@ -212,7 +213,7 @@ def review_verification(record_id: str, body: ReviewBody) -> dict[str, Any]:
                    reviewed_at = now(), flagged = false
                WHERE id = %s AND reviewed_at IS NULL
                RETURNING demand_cluster_id::text, reviewed_at""",
-            (body.decision, body.reviewer, record_id),
+            (body.decision, reviewer, record_id),
         ).fetchone()
         if updated is None:
             exists = conn.execute(
@@ -235,6 +236,9 @@ def review_verification(record_id: str, body: ReviewBody) -> dict[str, Any]:
             )
         # reject_resolution: the cluster stays resolved_unverified — a
         # rejected resolution claim is not verified, and nothing is deleted.
+        audit.append(conn, kind="verification_review", subject_id=record_id,
+                     decision=body.decision, reviewer=reviewer,
+                     payload={"cluster_id": cluster_id})
         conn.commit()
 
         cluster_status = conn.execute(
@@ -246,7 +250,7 @@ def review_verification(record_id: str, body: ReviewBody) -> dict[str, Any]:
         "id": record_id,
         "demand_cluster_id": cluster_id,
         "decision": body.decision,
-        "reviewer": body.reviewer,
+        "reviewer": reviewer,
         "reviewed_at": reviewed_at.isoformat(),
         "flagged": False,
         "cluster_status": cluster_status,

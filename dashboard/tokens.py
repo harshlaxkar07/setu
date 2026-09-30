@@ -166,9 +166,13 @@ p, li, label, .stMarkdown {{ color: var(--ink); }}
   font-family: 'Inter', sans-serif; font-weight: 500;
 }}
 .stButton > button:hover {{ border-color: var(--bridge-blue); color: var(--bridge-blue); }}
-.stButton > button[kind="primary"] {{
-  background: var(--bridge-blue); border-color: var(--bridge-blue); color: #FFFFFF;
+.stButton > button[kind="primary"],
+[data-testid="stBaseButton-primary"],
+[data-testid="stBaseButton-primaryFormSubmit"] {{
+  background: var(--bridge-blue); border-color: var(--bridge-blue); color: #FFFFFF !important;
 }}
+[data-testid="stBaseButton-primary"] p,
+[data-testid="stBaseButton-primaryFormSubmit"] p {{ color: #FFFFFF !important; }}
 .stButton > button[kind="primary"]:hover {{ background: var(--bridge-blue-deep); }}
 
 /* expanders read as cards, not default Streamlit chrome */
@@ -179,6 +183,8 @@ p, li, label, .stMarkdown {{ color: var(--ink); }}
 
 .section-title {{ font-size: 16px; font-weight: 700; margin: 24px 0 8px 0; }}
 .section-sub {{ font-weight: 500; color: var(--ink-2); }}
+.signed-in {{ background: var(--priority-low-soft); color: var(--priority-low);
+              border-radius: 8px; padding: 8px 16px; font-size: 13px; margin-top: 4px; }}
 
 /* ---- summary strip ------------------------------------------------------ */
 .kpi-strip {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));

@@ -29,7 +29,7 @@ from langgraph.types import Command, interrupt
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from app import db, trace
+from app import audit, db, trace
 from app.stages import cluster as cluster_stage
 from app.stages import fuse as fuse_stage
 from app.stages import locate as locate_stage
@@ -185,6 +185,10 @@ def _finalize(state: PipelineState) -> dict:
                    VALUES (%s, %s, %s)""",
                 (rec_id, decision, reviewer),
             )
+            audit.append(conn, kind="publish_gate", subject_id=rec_id,
+                         decision=decision, reviewer=reviewer,
+                         payload={"cluster_id": state["cluster_id"],
+                                  "thread_id": state["thread_id"]})
             if decision == "approved":
                 conn.execute(
                     "UPDATE recommendations SET status='published' WHERE id=%s",

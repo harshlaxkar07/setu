@@ -8,11 +8,11 @@ with the reviewer and time.
 """
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
 
-from app import db
+from app import audit, auth, db
 from app.stages import fuse as fuse_stage
 from app.stages import score as score_stage
 
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/trust", tags=["trust"])
 
 class FlagReview(BaseModel):
     decision: Literal["clear", "confirm"]
-    reviewer: str = Field(min_length=1, max_length=120)
+    reviewer: str | None = Field(default=None, max_length=120)  # ignored (D15)
 
 
 @router.get("/flags")
@@ -71,6 +71,9 @@ def review_flag(conn, flag_id: str, decision: str, reviewer: str) -> dict[str, A
            WHERE id = %s""",
         (new_status, reviewer, flag_id),
     )
+    audit.append(conn, kind="trust_flag_review", subject_id=flag_id,
+                 decision=new_status, reviewer=reviewer,
+                 payload={"rule": rule, "cluster_id": str(cluster_id) if cluster_id else None})
     if rule == "cluster_spike" and new_status == "cleared" and cluster_id:
         # The spike was legitimate: restore confidence it had lowered.
         conn.execute(
@@ -90,8 +93,9 @@ def review_flag(conn, flag_id: str, decision: str, reviewer: str) -> dict[str, A
 
 
 @router.post("/flags/{flag_id}/review")
-def review(flag_id: str, body: FlagReview) -> dict[str, Any]:
+def review(flag_id: str, body: FlagReview,
+           reviewer: str = Depends(auth.require_reviewer)) -> dict[str, Any]:
     with db.pool.connection() as conn:
-        result = review_flag(conn, flag_id, body.decision, body.reviewer)
+        result = review_flag(conn, flag_id, body.decision, reviewer)
         conn.commit()
     return result

@@ -10,7 +10,7 @@ The §8 verification-review endpoints do not exist yet: their helpers tolerate a
 side of that surface is already wired when §8 lands. Expected §8 contract,
 mirroring the gate pattern:
     GET  /api/verifications?flagged=true
-    POST /api/verifications/{record_id}/review   {"decision", "reviewer"}
+    POST /api/verifications/{record_id}/review   {"decision"} + reviewer token
 """
 import os
 from typing import Any
@@ -38,11 +38,22 @@ def _get(path: str, params: dict | None = None) -> Any:
         raise ApiError(f"backend unreachable at {BACKEND_URL}: {exc}") from exc
 
 
-def _post(path: str, body: dict | None = None) -> tuple[Any, str | None]:
+class SessionExpired(Exception):
+    """The reviewer's sign-in is missing, invalid or expired (401)."""
+
+
+def _post(path: str, body: dict | None = None,
+          token: str | None = None) -> tuple[Any, str | None]:
     """POST returning (payload, error). error is None only on a confirmed 2xx —
-    the caller must not change any displayed state unless error is None."""
+    the caller must not change any displayed state unless error is None.
+    Decision endpoints need `token` (reviewer sign-in, enhancements D15); a
+    401 raises SessionExpired so the UI can ask the reviewer to sign in."""
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
-        resp = httpx.post(f"{BACKEND_URL}{path}", json=body, timeout=TIMEOUT)
+        resp = httpx.post(f"{BACKEND_URL}{path}", json=body, headers=headers,
+                          timeout=TIMEOUT)
+        if resp.status_code == 401 and token is not None:
+            raise SessionExpired(resp.json().get("detail", "sign in again"))
         if resp.is_success:
             return resp.json(), None
         detail = ""
@@ -78,24 +89,43 @@ def get_recommendations(status: str) -> list[dict]:
     return _get("/api/recommendations", params={"status": status})
 
 
-# --- actions (always backend-confirmed, never optimistic) ----------------------
+# --- reviewer sign-in (enhancements D15) -------------------------------------
 
-def post_gate_decision(
-    thread_id: str, decision: str, reviewer: str
-) -> tuple[Any, str | None]:
+def configured_reviewers() -> list[str]:
+    try:
+        return _get("/api/auth/reviewers").get("configured", [])
+    except ApiError:
+        return []
+
+
+def login(name: str, passcode: str) -> tuple[dict | None, str | None]:
+    """(session {token, reviewer, expires_at}, error)."""
+    try:
+        resp = httpx.post(f"{BACKEND_URL}/api/auth/login",
+                          json={"name": name, "passcode": passcode}, timeout=TIMEOUT)
+    except httpx.HTTPError as exc:
+        return None, f"backend unreachable: {exc}"
+    if resp.is_success:
+        return resp.json(), None
+    return None, resp.json().get("detail", "sign-in failed")
+
+
+# --- actions (always backend-confirmed, never optimistic) ----------------------
+# The reviewer recorded with each decision is the signed-in account (the
+# backend takes it from the token), so no reviewer name is sent.
+
+def post_gate_decision(thread_id: str, decision: str,
+                       token: str) -> tuple[Any, str | None]:
     """Approve / Reject / Request-changes → §7's gate resume endpoint.
 
     decision ∈ {'approved', 'rejected', 'needs_revision'}.
     """
-    return _post(
-        f"/api/gate/{thread_id}/resume",
-        {"decision": decision, "reviewer": reviewer},
-    )
+    return _post(f"/api/gate/{thread_id}/resume", {"decision": decision}, token)
 
 
-def post_mark_resolved(cluster_id: str) -> tuple[Any, str | None]:
+def post_mark_resolved(cluster_id: str, token: str) -> tuple[Any, str | None]:
     """Simulated mark-resolved: published → resolved_unverified."""
-    return _post(f"/api/clusters/{cluster_id}/resolve")
+    return _post(f"/api/clusters/{cluster_id}/resolve", token=token)
 
 
 # --- §8 verification review (404-tolerant until the bolt-on lands) -------------
@@ -115,11 +145,8 @@ def get_flagged_verifications() -> tuple[list[dict], bool]:
         return [], False
 
 
-def post_verification_review(
-    record_id: str, decision: str, reviewer: str
-) -> tuple[Any, str | None]:
+def post_verification_review(record_id: str, decision: str,
+                             token: str) -> tuple[Any, str | None]:
     """decision ∈ {'confirm_resolved', 'reject_resolution'} (§8 endpoint)."""
-    return _post(
-        f"/api/verifications/{record_id}/review",
-        {"decision": decision, "reviewer": reviewer},
-    )
+    return _post(f"/api/verifications/{record_id}/review",
+                 {"decision": decision}, token)

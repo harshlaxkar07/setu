@@ -20,6 +20,8 @@ from app.main import app
 from app.routers import verification as verification_router
 from app.stages import verify as verify_stage
 from tests.conftest_a import (
+    reviewer_headers,
+    reviewer_name,
     BASE_LAT,
     BASE_LON,
     cleanup_test_state,
@@ -164,14 +166,18 @@ def test_mark_resolved_transitions_published_cluster_only(client, conn):
                  (cid,))
     conn.commit()
 
-    r = client.post(f"/api/clusters/{cid}/resolve")
+    # Unsigned: refused, nothing changes (enhancements task 4.2).
+    assert client.post(f"/api/clusters/{cid}/resolve").status_code == 401
+    assert cluster_state(conn, cid)[0] == "published"
+
+    r = client.post(f"/api/clusters/{cid}/resolve", headers=reviewer_headers())
     assert r.status_code == 200
     assert r.json() == {"id": cid, "status": "resolved_unverified"}
     assert cluster_state(conn, cid)[0] == "resolved_unverified"
 
     # Resolution alone never verifies: it stays resolved_unverified, and a
     # second resolve is refused rather than faking a transition.
-    assert client.post(f"/api/clusters/{cid}/resolve").status_code == 409
+    assert client.post(f"/api/clusters/{cid}/resolve", headers=reviewer_headers()).status_code == 409
     assert cluster_state(conn, cid)[0] == "resolved_unverified"
 
 
@@ -486,7 +492,7 @@ def test_review_confirm_resolved_clears_flag_and_verifies_cluster(
     cid = make_resolved_cluster(conn)
     record_id = post_followup(client, cid, conv_id(), photos=1).json()["id"]
 
-    r = client.post(f"/api/verifications/{record_id}/review",
+    r = client.post(f"/api/verifications/{record_id}/review", headers=reviewer_headers(),
                     json={"decision": "confirm_resolved",
                           "reviewer": "Block Officer Deshmukh"})
     assert r.status_code == 200
@@ -497,7 +503,7 @@ def test_review_confirm_resolved_clears_flag_and_verifies_cluster(
     rec = record_row(conn, record_id)
     assert rec["flagged"] is False
     assert rec["review_decision"] == "confirm_resolved"
-    assert rec["review_reviewer"] == "Block Officer Deshmukh"
+    assert rec["review_reviewer"] == reviewer_name()  # from the token (D15)
     assert rec["reviewed_at"] is not None
     assert cluster_state(conn, cid)[0] == "resolved_verified"
 
@@ -505,7 +511,7 @@ def test_review_confirm_resolved_clears_flag_and_verifies_cluster(
     listing = client.get("/api/verifications").json()
     mine = [x for x in listing if x["id"] == record_id][0]
     assert mine["review_decision"] == "confirm_resolved"
-    assert mine["review_reviewer"] == "Block Officer Deshmukh"
+    assert mine["review_reviewer"] == reviewer_name()
     assert mine["reviewed_at"] is not None
 
 
@@ -515,7 +521,7 @@ def test_review_reject_records_decision_cluster_stays_unverified(
     cid = make_resolved_cluster(conn)
     record_id = post_followup(client, cid, conv_id(), photos=1).json()["id"]
 
-    r = client.post(f"/api/verifications/{record_id}/review",
+    r = client.post(f"/api/verifications/{record_id}/review", headers=reviewer_headers(),
                     json={"decision": "reject_resolution",
                           "reviewer": "Block Officer Deshmukh"})
     assert r.status_code == 200
@@ -531,23 +537,26 @@ def test_review_reject_records_decision_cluster_stays_unverified(
 
 
 def test_review_unknown_404_and_second_review_409(client, conn, monkeypatch):
-    assert client.post(f"/api/verifications/{uuid.uuid4()}/review",
+    assert client.post(f"/api/verifications/{uuid.uuid4()}/review", headers=reviewer_headers(),
                        json={"decision": "confirm_resolved",
                              "reviewer": "X"}).status_code == 404
-    assert client.post("/api/verifications/not-a-uuid/review",
+    assert client.post("/api/verifications/not-a-uuid/review", headers=reviewer_headers(),
                        json={"decision": "confirm_resolved",
                              "reviewer": "X"}).status_code == 404
 
     mock_gemini(monkeypatch, MISMATCH_JSON)
     cid = make_resolved_cluster(conn)
     record_id = post_followup(client, cid, conv_id(), photos=1).json()["id"]
-    first = client.post(f"/api/verifications/{record_id}/review",
+    # Unsigned review: 401, record stays unreviewed (enhancements task 4.2).
+    assert client.post(f"/api/verifications/{record_id}/review",
+                       json={"decision": "confirm_resolved"}).status_code == 401
+    first = client.post(f"/api/verifications/{record_id}/review", headers=reviewer_headers(),
                         json={"decision": "reject_resolution", "reviewer": "A"})
     assert first.status_code == 200
-    second = client.post(f"/api/verifications/{record_id}/review",
+    second = client.post(f"/api/verifications/{record_id}/review", headers=reviewer_headers(),
                          json={"decision": "confirm_resolved", "reviewer": "B"})
     assert second.status_code == 409
     # The first decision stands, unrewritten.
     rec = record_row(conn, record_id)
     assert rec["review_decision"] == "reject_resolution"
-    assert rec["review_reviewer"] == "A"
+    assert rec["review_reviewer"] == reviewer_name()

@@ -1,0 +1,13 @@
+# Streamlit's own theme: bridge-blue primary (tabs, primary buttons, focus),
+# so no widget falls back to Streamlit's default red — red means "high
+# priority" on this dashboard (files/07 design tokens).
+[theme]
+base = "light"
+primaryColor = "#2B5FA8"
+backgroundColor = "#F7F8FA"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#17212B"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"

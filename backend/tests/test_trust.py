@@ -17,6 +17,8 @@ from app.constants import (
 )
 from app.stages import fuse, score, trust
 from tests.conftest_a import (
+    reviewer_headers,
+    reviewer_name,
     BASE_LAT,
     BASE_LON,
     TEST_REF_PREFIX,
@@ -291,13 +293,14 @@ def test_clearing_a_flag_restores_volume_and_records_reviewer(conn, client):
         cid, flag_id = _repeat_flagged_cluster(conn)
         listed = client.get("/api/trust/flags", params={"cluster_id": cid}).json()
         assert [f["id"] for f in listed] == [flag_id]
-        r = client.post(f"/api/trust/flags/{flag_id}/review",
+        r = client.post(f"/api/trust/flags/{flag_id}/review", headers=reviewer_headers(),
                         json={"decision": "clear", "reviewer": "Test Reviewer"})
         assert r.status_code == 200 and r.json()["status"] == "cleared"
         status, reviewer, reviewed_at = conn.execute(
             "SELECT status, reviewer, reviewed_at FROM trust_flags WHERE id = %s",
             (flag_id,)).fetchone()
-        assert (status, reviewer) == ("cleared", "Test Reviewer") and reviewed_at
+        # Identity comes from the sign-in token, not the body (D15).
+        assert (status, reviewer) == ("cleared", reviewer_name()) and reviewed_at
         # Re-scored in the same transaction: the cleared request counts again.
         (value,) = conn.execute(
             """SELECT value_numeric FROM priority_indicators
@@ -305,7 +308,7 @@ def test_clearing_a_flag_restores_volume_and_records_reviewer(conn, client):
             (cid,)).fetchone()
         assert float(value) == TRUST_REPEAT_LIMIT + 1
         # A second review of the same flag is refused, not silently re-applied.
-        again = client.post(f"/api/trust/flags/{flag_id}/review",
+        again = client.post(f"/api/trust/flags/{flag_id}/review", headers=reviewer_headers(),
                             json={"decision": "confirm", "reviewer": "Someone"})
         assert again.status_code == 409
     finally:
@@ -314,6 +317,15 @@ def test_clearing_a_flag_restores_volume_and_records_reviewer(conn, client):
 
 
 def test_unknown_flag_is_404(client):
-    r = client.post(f"/api/trust/flags/{uuid.uuid4()}/review",
+    r = client.post(f"/api/trust/flags/{uuid.uuid4()}/review", headers=reviewer_headers(),
                     json={"decision": "clear", "reviewer": "x"})
     assert r.status_code == 404
+
+
+def test_trust_review_requires_sign_in(conn, client):
+    _, flag_id = _repeat_flagged_cluster(conn)
+    r = client.post(f"/api/trust/flags/{flag_id}/review", json={"decision": "clear"})
+    assert r.status_code == 401
+    (status,) = conn.execute("SELECT status FROM trust_flags WHERE id = %s",
+                             (flag_id,)).fetchone()
+    assert status == "open"

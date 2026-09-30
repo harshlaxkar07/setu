@@ -62,6 +62,62 @@ except api.ApiError as exc:
     recs_error = str(exc)
 flagged, verification_available = api.get_flagged_verifications()
 
+
+# --------------------------------------------------------------------------
+# Reviewer session (enhancements D15): decisions need a signed-in reviewer;
+# viewing never does. The backend records the account name from the token.
+# --------------------------------------------------------------------------
+def session_token() -> str | None:
+    return (st.session_state.get("session") or {}).get("token")
+
+
+def signed_in_as() -> str | None:
+    return (st.session_state.get("session") or {}).get("reviewer")
+
+
+def decide(call, *args):
+    """Run a decision call with the session token; a 401 ends the session."""
+    try:
+        return call(*args, session_token())
+    except api.SessionExpired as exc:
+        st.session_state.pop("session", None)
+        return None, f"your reviewer session ended ({exc}) — sign in again"
+
+
+def reviewer_panel() -> None:
+    """Sign-in form, or who is signed in with a sign-out button."""
+    who = signed_in_as()
+    if who:
+        c1, c2 = st.columns([5, 1])
+        c1.markdown(f'<div class="signed-in">Signed in as <b>{ui.esc(who)}</b> — '
+                    "your name is recorded with every decision.</div>",
+                    unsafe_allow_html=True)
+        if c2.button("Sign out", key="sign_out"):
+            st.session_state.pop("session", None)
+            st.rerun()
+        return
+    names = api.configured_reviewers()
+    if not names:
+        st.warning("No reviewer accounts are configured, so decisions cannot be "
+                   "recorded. Add REVIEWERS to .env (see README) and restart.")
+        return
+    with st.form("sign_in", clear_on_submit=True):
+        st.markdown('<div class="card-title">Reviewer sign-in</div>'
+                    '<div class="small-note">Viewing is open to everyone; '
+                    "approving, rejecting and reviewing require a reviewer "
+                    "account.</div>", unsafe_allow_html=True)
+        c1, c2, c3 = st.columns([3, 3, 1])
+        name = c1.selectbox("Reviewer", names, key="sign_in_name")
+        passcode = c2.text_input("Passcode", type="password", key="sign_in_pass")
+        c3.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if c3.form_submit_button("Sign in", type="primary"):
+            session, err = api.login(name, passcode)
+            if err:
+                st.error(err)
+            else:
+                st.session_state.session = session
+                st.rerun()
+
 # --------------------------------------------------------------------------
 # Summary strip: what needs attention, at a glance
 # --------------------------------------------------------------------------
@@ -231,8 +287,11 @@ with tab_priorities:
             f'{ui.status_badge(sel["status"])}</div>', unsafe_allow_html=True,
         )
         if sel["status"] == "published":
-            if st.button("Mark resolved (simulated)", key="resolve_btn"):
-                _, err = api.post_mark_resolved(sel["id"])
+            if st.button("Mark resolved (simulated)", key="resolve_btn",
+                         disabled=not signed_in_as(),
+                         help=None if signed_in_as() else
+                         "Sign in on the Publish Gate tab to record this"):
+                _, err = decide(api.post_mark_resolved, sel["id"])
                 if err:
                     st.error(f"Mark-resolved failed — nothing changed: {err}")
                 else:
@@ -326,9 +385,7 @@ def _recommendation_card(rec: dict, gated: bool) -> None:
 
 
 with tab_gate:
-    reviewer = st.text_input("Reviewer identity (recorded with every decision)",
-                             value=st.session_state.get("reviewer", "Demo Reviewer"),
-                             key="reviewer")
+    reviewer_panel()
     if recs_error:
         st.error(f"Could not load recommendations: {recs_error}")
 
@@ -345,22 +402,24 @@ with tab_gate:
                         "Publish Gate.</div>", unsafe_allow_html=True)
             continue
         b1, b2, b3 = st.columns(3)
+        locked = not signed_in_as()
         decision = None
-        if b1.button("Approve", key=f"approve_{rec['id']}", type="primary"):
+        if b1.button("Approve", key=f"approve_{rec['id']}", type="primary",
+                     disabled=locked):
             decision = "approved"
-        if b2.button("Reject", key=f"reject_{rec['id']}"):
+        if b2.button("Reject", key=f"reject_{rec['id']}", disabled=locked):
             decision = "rejected"
-        if b3.button("Request changes", key=f"changes_{rec['id']}"):
+        if b3.button("Request changes", key=f"changes_{rec['id']}", disabled=locked):
             decision = "needs_revision"
         if decision:
             # No optimistic state: only a confirmed backend response changes what
             # is displayed; on error the item stays exactly as it was (spec).
-            _, err = api.post_gate_decision(rec["thread_id"], decision, reviewer)
+            out, err = decide(api.post_gate_decision, rec["thread_id"], decision)
             if err:
                 st.error(f"Decision NOT recorded — the recommendation remains "
                          f"pending. {err}")
             else:
-                st.success(f"Decision '{decision}' recorded by {reviewer}.")
+                st.success(f"Decision '{decision}' recorded by {out['reviewer']}.")
                 st.rerun()
 
     # Sent back with Request-changes: unpublished, visibly awaiting revision —
@@ -388,6 +447,9 @@ with tab_gate:
 # Verification review surface (§8 backend pending — 404-tolerant client side)
 # --------------------------------------------------------------------------
 with tab_verify:
+    if flagged and not signed_in_as():
+        st.markdown('<div class="small-note">Sign in on the Publish Gate tab to '
+                    "record verification reviews.</div>", unsafe_allow_html=True)
     if not verification_available:
         st.markdown(
             '<div class="small-note">Flagged-verification review activates with '
@@ -411,14 +473,15 @@ with tab_verify:
             unsafe_allow_html=True,
         )
         c1, c2 = st.columns(2)
+        locked = not signed_in_as()
         v_decision = None
-        if c1.button("Confirm resolved", key=f"vc_{record['id']}", type="primary"):
+        if c1.button("Confirm resolved", key=f"vc_{record['id']}", type="primary",
+                     disabled=locked):
             v_decision = "confirm_resolved"
-        if c2.button("Reject resolution", key=f"vr_{record['id']}"):
+        if c2.button("Reject resolution", key=f"vr_{record['id']}", disabled=locked):
             v_decision = "reject_resolution"
         if v_decision:
-            _, err = api.post_verification_review(
-                record["id"], v_decision, st.session_state.get("reviewer", "Demo Reviewer"))
+            _, err = decide(api.post_verification_review, record["id"], v_decision)
             if err:
                 st.error(f"Review NOT recorded — the flag remains active. {err}")
             else:

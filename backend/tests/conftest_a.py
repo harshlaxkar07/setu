@@ -311,3 +311,25 @@ def cleanup_test_state() -> None:
             fuse_stage.fuse_cluster(conn, cid)
         score_stage.score_category(conn, CATEGORY_WATER)
         conn.commit()
+
+
+# --------------------------------------------------------- reviewer auth
+
+def reviewer_headers() -> dict[str, str]:
+    """Authorization header for the first configured reviewer (REVIEWERS in
+    .env). The token is signed with the same SESSION_SECRET the running
+    backend uses, so it works for in-process and live-server calls alike."""
+    import pytest
+
+    from app import auth
+    names = sorted(auth.reviewers())
+    if not names:
+        pytest.fail("REVIEWERS is not configured in .env — decision endpoints "
+                    "require a reviewer account (see README)")
+    token, _ = auth.issue_token(names[0])
+    return {"Authorization": f"Bearer {token}"}
+
+
+def reviewer_name() -> str:
+    from app import auth
+    return sorted(auth.reviewers())[0]

@@ -24,9 +24,9 @@
 
 ## 4. Privacy and governance
 
-- [ ] 4.1 Implement reviewer accounts and signed session tokens (D15): `REVIEWERS`/`SESSION_SECRET` config, `scripts/hash_passcode.py`, `POST /api/auth/login`; verify tests for correct login, wrong passcode, and expired/forged tokens
-- [ ] 4.2 Require a valid token on gate resume, verification review, trust review and resolve, taking reviewer identity from the token; update existing tests with a token fixture; verify unauthenticated decision calls return 401 and the full suite passes
-- [ ] 4.3 Migration for `decision_log`; append chained entries in the same transaction as each decision and add `GET /api/audit/verify` (D14); verify a test that tampers with a stored entry and gets it reported as the first break, and a concurrency test with parallel approvals leaves an intact chain
+- [x] 4.1 Implement reviewer accounts and signed session tokens (D15): `REVIEWERS`/`SESSION_SECRET` config, `scripts/hash_passcode.py`, `POST /api/auth/login`; verify tests for correct login, wrong passcode, and expired/forged tokens
+- [x] 4.2 Require a valid token on gate resume, verification review, trust review and resolve, taking reviewer identity from the token; update existing tests with a token fixture; verify unauthenticated decision calls return 401 and the full suite passes
+- [x] 4.3 Migration for `decision_log`; append chained entries in the same transaction as each decision and add `GET /api/audit/verify` (D14); verify a test that tampers with a stored entry and gets it reported as the first break, and a concurrency test with parallel approvals leaves an intact chain
 
 ## 5. Equity insights, planner and impact (backend)
 
@@ -49,7 +49,7 @@
 ## 8. Dashboard analytics
 
 - [ ] 8.1 Wrap data panels in `st.fragment(run_every=...)` with selection, tab, category filter and reviewer session in session_state (D10); verify in a browser that a new citizen submission updates the member count within one interval while the selected cluster and open tab stay put
-- [ ] 8.2 Reviewer sign-in panel; decision buttons disabled when signed out; token passed on decision calls; verify signed-out viewers see recommendations without actions and a signed-in approval records the account name
+- [x] 8.2 Reviewer sign-in panel; decision buttons disabled when signed out; token passed on decision calls; verify signed-out viewers see recommendations without actions and a signed-in approval records the account name
 - [ ] 8.3 Category filter applied to map, list, summary strip and trends; map layer toggles (clusters, heatmap on counted volume, silent regions) with labelled legend; verify grayscale screenshots still distinguish every layer and tier
 - [ ] 8.4 Trends chart (flagged vs unflagged per day, per category) and total vs counted volume on cluster cards with trust-flag badges and clear/confirm actions; verify after `spam_attack.py` the spike renders as flagged volume
 - [ ] 8.5 Equity tab (ranking comparison + silent regions list), Planner tab (what-if on selected cluster + allocation for N sites, labelled advisory), Impact panel on resolved clusters, and brief download button; verify each view in a browser against the seeded data with no Streamlit exceptions

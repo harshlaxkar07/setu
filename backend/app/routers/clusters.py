@@ -19,10 +19,10 @@ score itself is entirely defined by the locked constants in
 """
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from psycopg.rows import dict_row
 
-from app import db
+from app import audit, auth, db
 
 router = APIRouter(prefix="/api", tags=["clusters"])
 
@@ -304,7 +304,8 @@ def list_recommendations(
 
 
 @router.post("/clusters/{cluster_id}/resolve")
-def resolve_cluster(cluster_id: str) -> dict[str, Any]:
+def resolve_cluster(cluster_id: str,
+                    reviewer: str = Depends(auth.require_reviewer)) -> dict[str, Any]:
     """Simulated mark-resolved: ``published → resolved_unverified`` only.
 
     Resolution is a *claim pending verification* (verification spec) — the
@@ -330,5 +331,7 @@ def resolve_cluster(cluster_id: str) -> dict[str, Any]:
                 detail=f"cluster is '{current[0]}' — only a published cluster "
                        "can be marked resolved",
             )
+        audit.append(conn, kind="mark_resolved", subject_id=cluster_id,
+                     decision="resolved_unverified", reviewer=reviewer)
         conn.commit()
     return {"id": cluster_id, "status": "resolved_unverified"}
