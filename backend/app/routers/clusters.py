@@ -316,9 +316,10 @@ def resolve_cluster(cluster_id: str,
         # Atomic check-and-transition: no window for a concurrent status change
         # between check and update (review finding).
         updated = conn.execute(
-            """UPDATE demand_clusters SET status = 'resolved_unverified'
+            """UPDATE demand_clusters SET status = 'resolved_unverified',
+                      resolved_at = now(), resolved_by = %s
                WHERE id = %s AND status = 'published' RETURNING id""",
-            (cluster_id,),
+            (reviewer, cluster_id),
         ).fetchone()
         if updated is None:
             current = conn.execute(
@@ -335,3 +336,14 @@ def resolve_cluster(cluster_id: str,
                      decision="resolved_unverified", reviewer=reviewer)
         conn.commit()
     return {"id": cluster_id, "status": "resolved_unverified"}
+
+
+@router.get("/clusters/{cluster_id}/impact")
+def cluster_impact(cluster_id: str) -> dict[str, Any]:
+    """Before/after complaint rate and gap for a resolved cluster (D9)."""
+    from app import impact
+    with db.pool.connection() as conn:
+        out = impact.measure(conn, cluster_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="cluster not found")
+    return out

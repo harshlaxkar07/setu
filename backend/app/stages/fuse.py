@@ -41,6 +41,7 @@ from psycopg.types.json import Json
 from app.constants import (
     CATEGORY_HEALTH,
     CATEGORY_ROAD,
+    CATEGORY_SANITATION,
     CATEGORY_WATER,
     SERVICE_RADIUS_M,
 )
@@ -52,6 +53,7 @@ CATEGORY_FACILITY_TYPES: dict[str, str] = {
     CATEGORY_WATER: "water_point",
     CATEGORY_HEALTH: "health_facility",      # hospitals, PHCs, clinics
     CATEGORY_ROAD: "road_access_point",      # all-weather road access points
+    CATEGORY_SANITATION: "sanitation_facility",  # drainage, community toilets
 }
 
 # Which facility register scoring counts (enhancements design D6): the

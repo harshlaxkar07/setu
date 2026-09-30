@@ -30,9 +30,9 @@
 
 ## 5. Equity insights, planner and impact (backend)
 
-- [ ] 5.1 Implement `GET /api/insights/silent-regions` and `GET /api/insights/ranking` (D3) reusing Fuse's gap helpers; verify tests that the seeded zero-request village appears as silent with its factors, a well-served region does not, and the water ranking comparison shows Kothrud first by count and Velhe first by score
-- [ ] 5.2 Implement `POST /api/planner/whatif` and `POST /api/planner/allocate` (D4); verify tests that a proposed water point at Velhe changes its facility count 0→1 without writing any facility row, allocation returns sites in descending marginal coverage, and published state is identical before and after planner calls
-- [ ] 5.3 Migration for `demand_clusters.resolved_at`; set it on resolve; implement `GET /api/clusters/{id}/impact` (D9) and seed one resolved cluster with backdated history; verify tests for full-window before/after counts, partial-window reporting, and that impact never changes verification status
+- [x] 5.1 Implement `GET /api/insights/silent-regions` and `GET /api/insights/ranking` (D3) reusing Fuse's gap helpers; verify tests that the seeded zero-request village appears as silent with its factors, a well-served region does not, and the water ranking comparison shows Kothrud first by count and Velhe first by score
+- [x] 5.2 Implement `POST /api/planner/whatif` and `POST /api/planner/allocate` (D4); verify tests that a proposed water point at Velhe changes its facility count 0→1 without writing any facility row, allocation returns sites in descending marginal coverage, and published state is identical before and after planner calls
+- [x] 5.3 Migration for `demand_clusters.resolved_at`; set it on resolve; implement `GET /api/clusters/{id}/impact` (D9) and seed one resolved cluster with backdated history; verify tests for full-window before/after counts, partial-window reporting, and that impact never changes verification status
 
 ## 6. Citizen experience
 

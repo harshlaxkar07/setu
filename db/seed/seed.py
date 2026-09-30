@@ -48,6 +48,19 @@ DATABASE_URL = os.environ.get(
 )
 
 RNG = random.Random(20260926)  # fixed: reproducible seed state (task 2.8)
+# Separate generator for arrival times (enhancements D9/trends): seeded
+# complaints arrive over the last HISTORY_DAYS instead of all "now". Kept
+# apart from RNG so texts, positions and cached embeddings are unchanged.
+HIST = random.Random(20260930)
+HISTORY_DAYS = 60
+
+
+def arrival_time():
+    """A past arrival within HISTORY_DAYS (never inside the last hour, so the
+    Trust stage's spike/burst windows see a realistic baseline)."""
+    from datetime import datetime, timedelta, timezone
+    return datetime.now(timezone.utc) - timedelta(
+        hours=HIST.uniform(1, HISTORY_DAYS * 24))
 
 N_REGION_A = 500
 N_REGION_B = 20
@@ -300,10 +313,12 @@ def main() -> int:
         cluster_ids[place] = cluster_id
 
         for r in reqs:
+            at = r.get("at") or arrival_time()
             cur.execute(
-                """INSERT INTO citizen_requests (channel, raw_text, submitter_ref)
-                   VALUES ('text', %s, %s) RETURNING id""",
-                (r["text"], r["submitter"]),
+                """INSERT INTO citizen_requests
+                     (channel, raw_text, submitter_ref, created_at)
+                   VALUES ('text', %s, %s, %s) RETURNING id""",
+                (r["text"], r["submitter"], at),
             )
             cr_id = cur.fetchone()[0]
             cur.execute(
@@ -326,9 +341,10 @@ def main() -> int:
             gr_id = cur.fetchone()[0]
             cur.execute(
                 """INSERT INTO cluster_memberships
-                     (geocoded_request_id, demand_cluster_id, similarity_score)
-                   VALUES (%s, %s, %s)""",
-                (gr_id, cluster_id, round(0.86 + RNG.random() * 0.1, 4)),
+                     (geocoded_request_id, demand_cluster_id, similarity_score,
+                      created_at)
+                   VALUES (%s, %s, %s, %s)""",
+                (gr_id, cluster_id, round(0.86 + RNG.random() * 0.1, 4), at),
             )
 
     # Region B's under-representation signal (task 2.6; files/04 worked example).
@@ -365,6 +381,8 @@ def main() -> int:
                     fuse_cluster(c2, cid)
                 score_category(c2, category)
             c2.commit()
+            seed_resolved_example(c2)
+            c2.commit()
         scored = True
     except ImportError:
         print("(Fuse/Score stages not built yet — task 2.7 pass skipped.)")
@@ -383,6 +401,116 @@ def main() -> int:
     if not scored:
         return 0
     return 0
+
+
+# The impact-measurement example (enhancements D9): open drains in Paud,
+# resolved RESOLVED_DAYS_AGO after a drainage facility was built. 40 complaints
+# arrived in the 30 days before resolution, 5 in the 30 days after.
+RESOLVED_DAYS_AGO = 35
+SANITATION_TEXTS = [
+    "Paud में नालियाँ भरी पड़ी हैं, गंदा पानी सड़क पर बह रहा है।",
+    "Paud me gutter overflow ho raha hai, bahut badboo aati hai.",
+    "Paud मध्ये गटार तुंबले आहे, डासांचा त्रास वाढला आहे.",
+    "Paud की नाली हफ़्तों से साफ़ नहीं हुई, बीमारी फैलने का डर है।",
+]
+
+
+def seed_resolved_example(conn) -> None:
+    """A resolved sanitation cluster with a real before/after history, a
+    historical approval (logged in the decision chain) and a new facility."""
+    from datetime import datetime, timedelta, timezone
+
+    from app import audit
+    from app.constants import CATEGORY_SANITATION
+    from app.stages.fuse import fuse_cluster
+    from app.stages.score import score_category
+
+    print("Seeding the resolved Paud sanitation example (impact history) ...")
+    now = datetime.now(timezone.utc)
+    resolved_at = now - timedelta(days=RESOLVED_DAYS_AGO)
+    paud = next(r for r in EXTRA_REGIONS if r[0] == "Paud")
+    lat, lon = paud[1], paud[2]
+    (ds_fac,) = conn.execute(
+        "SELECT id FROM infrastructure_datasets WHERE name LIKE 'Synthetic water%'"
+    ).fetchone()
+    # One drainage facility long before, one built at resolution.
+    for i, built in enumerate((now - timedelta(days=400), resolved_at)):
+        flat, flon = jitter(lat, lon, 600)
+        conn.execute(
+            """INSERT INTO infrastructure_facilities
+                 (dataset_id, facility_type, geom, functioning, name, created_at)
+               VALUES (%s, 'sanitation_facility', ST_SetSRID(ST_MakePoint(%s,%s),4326),
+                       true, %s, %s)""",
+            (ds_fac, flon, flat, f"Paud Drainage Works {i + 1}", built))
+
+    arrivals = ([resolved_at - timedelta(hours=HIST.uniform(1, 30 * 24)) for _ in range(40)]
+                + [resolved_at + timedelta(hours=HIST.uniform(1, 30 * 24)) for _ in range(5)])
+    texts = [SANITATION_TEXTS[i % len(SANITATION_TEXTS)] for i in range(len(arrivals))]
+    embeddings = embed_texts(sorted(set(texts)))
+    summary = "Open drains overflowing onto roads in Paud"
+    (cluster_id,) = conn.execute(
+        """INSERT INTO demand_clusters (category, centroid, representative_summary,
+               member_count, status, confidence, created_at)
+           VALUES (%s, ST_SetSRID(ST_MakePoint(%s,%s),4326), %s, %s, 'active',
+                   'high', %s) RETURNING id""",
+        (CATEGORY_SANITATION, lon, lat, summary, len(arrivals), min(arrivals)),
+    ).fetchone()
+    for i, (text, at) in enumerate(zip(texts, arrivals)):
+        (cr,) = conn.execute(
+            """INSERT INTO citizen_requests (channel, raw_text, submitter_ref, created_at)
+               VALUES ('text', %s, %s, %s) RETURNING id""",
+            (text, f"seed-sanit-paud-{i:04d}", at)).fetchone()
+        (sr,) = conn.execute(
+            """INSERT INTO structured_requests (citizen_request_id, category, urgency,
+                   summary, detected_language, raw_location_mention)
+               VALUES (%s, %s, 'medium', %s, %s, 'Paud') RETURNING id""",
+            (cr, CATEGORY_SANITATION, summary,
+             "Hinglish" if text.split()[1].isascii() else
+             "Marathi" if "मध्ये" in text else "Hindi")).fetchone()
+        plat, plon = jitter(lat, lon, 900)
+        (gr,) = conn.execute(
+            """INSERT INTO geocoded_requests (structured_request_id, geom, confidence,
+                   embedding)
+               VALUES (%s, ST_SetSRID(ST_MakePoint(%s,%s),4326), 'high', %s)
+               RETURNING id""",
+            (sr, plon, plat, embeddings.get(text) if embeddings else None)).fetchone()
+        conn.execute(
+            """INSERT INTO cluster_memberships (geocoded_request_id, demand_cluster_id,
+                   similarity_score, created_at) VALUES (%s, %s, 0.93, %s)""",
+            (gr, cluster_id, at))
+    fuse_cluster(conn, cluster_id)
+    score_category(conn, CATEGORY_SANITATION)
+
+    # Historical recommendation, approval (in the hash chain) and resolution.
+    (ind_id, ind_name, ind_value) = conn.execute(
+        """SELECT id::text, name, value_text FROM priority_indicators
+           WHERE demand_cluster_id = %s AND name = 'population affected'""",
+        (cluster_id,)).fetchone()
+    approved_at = resolved_at - timedelta(days=12)
+    (rec_id,) = conn.execute(
+        """INSERT INTO recommendations (demand_cluster_id, intervention_text,
+               intervention_type, indicator_citations, status, created_at)
+           VALUES (%s, %s, 'sanitation_infrastructure_evaluation', %s, 'published', %s)
+           RETURNING id""",
+        (cluster_id,
+         "Rebuild the covered drain along Paud's main road and add a second "
+         "drainage outfall, prioritising the stretch where overflow reaches homes.",
+         json.dumps([{"indicator_id": ind_id, "name": ind_name, "value": ind_value}]),
+         approved_at - timedelta(days=2))).fetchone()
+    reviewer = "Demo Reviewer (seeded history)"
+    conn.execute(
+        """INSERT INTO approvals (recommendation_id, decision, reviewer, decided_at)
+           VALUES (%s, 'approved', %s, %s)""", (rec_id, reviewer, approved_at))
+    audit.append(conn, kind="publish_gate", subject_id=str(rec_id), decision="approved",
+                 reviewer=reviewer, payload={"cluster_id": str(cluster_id),
+                                             "seeded_history": True})
+    conn.execute(
+        """UPDATE demand_clusters SET status = 'resolved_unverified',
+               resolved_at = %s, resolved_by = %s WHERE id = %s""",
+        (resolved_at, reviewer, cluster_id))
+    audit.append(conn, kind="mark_resolved", subject_id=str(cluster_id),
+                 decision="resolved_unverified", reviewer=reviewer,
+                 payload={"seeded_history": True})
 
 
 def seed_enhancement_regions(cur, ds_pop, ds_fac) -> None:
@@ -447,10 +575,12 @@ def seed_enhancement_regions(cur, ds_pop, ds_fac) -> None:
         )
         cluster_id = cur.fetchone()[0]
         for r in reqs:
+            at = r.get("at") or arrival_time()
             cur.execute(
-                """INSERT INTO citizen_requests (channel, raw_text, submitter_ref)
-                   VALUES ('text', %s, %s) RETURNING id""",
-                (r["text"], r["submitter"]),
+                """INSERT INTO citizen_requests
+                     (channel, raw_text, submitter_ref, created_at)
+                   VALUES ('text', %s, %s, %s) RETURNING id""",
+                (r["text"], r["submitter"], at),
             )
             cr_id = cur.fetchone()[0]
             cur.execute(
@@ -472,9 +602,10 @@ def seed_enhancement_regions(cur, ds_pop, ds_fac) -> None:
             gr_id = cur.fetchone()[0]
             cur.execute(
                 """INSERT INTO cluster_memberships
-                     (geocoded_request_id, demand_cluster_id, similarity_score)
-                   VALUES (%s, %s, %s)""",
-                (gr_id, cluster_id, round(0.86 + RNG.random() * 0.1, 4)),
+                     (geocoded_request_id, demand_cluster_id, similarity_score,
+                      created_at)
+                   VALUES (%s, %s, %s, %s)""",
+                (gr_id, cluster_id, round(0.86 + RNG.random() * 0.1, 4), at),
             )
 
 
