@@ -57,11 +57,11 @@
 
 ## 9. Evaluation, scale and demo operations
 
-- [ ] 9.1 Author `backend/eval/dataset.jsonl` with ≥50 labelled items across Hindi, Hinglish, English and Marathi, all seeded categories, and informal locations; verify a loader test asserts the coverage requirements
+- [x] 9.1 Author `backend/eval/dataset.jsonl` with ≥50 labelled items across Hindi, Hinglish, English and Marathi, all seeded categories, and informal locations; verify a loader test asserts the coverage requirements
 - [ ] 9.2 Implement `backend/eval/run_eval.py` writing `report.json` and a summary table with per-language breakdowns; run once live to record fixtures, then twice in replay; verify both replay runs report identical figures
-- [ ] 9.3 Implement `backend/eval/scale_test.py` for 10,000 synthetic requests with no network access; verify it reports total time and requests/second with networking disabled in the container
+- [x] 9.3 Implement `backend/eval/scale_test.py` for 10,000 synthetic requests with no network access; verify it reports total time and requests/second with networking disabled in the container
 - [ ] 9.4 Add `scripts/share.sh` (Cloudflare quick tunnel + QR code, opt-in only) and document privacy implications in the README; verify the printed URL serves the citizen page from a phone
-- [ ] 9.5 Update README (features, new env vars, reviewer setup, eval results, demo script with spam attack and planner) and CONTRIBUTING; verify every command in the README runs as written on a fresh clone
+- [x] 9.5 Update README (features, new env vars, reviewer setup, eval results, demo script with spam attack and planner) and CONTRIBUTING; verify every command in the README runs as written on a fresh clone
 
 ## 10. Regression and rehearsal
 
