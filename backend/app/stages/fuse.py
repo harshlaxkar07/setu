@@ -32,17 +32,44 @@ ordering. Fuse applies the sentinel against the gaps stored so far;
 normalizing (and updates the stored row), so the final stored value never
 depends on the order clusters were fused in.
 """
+import os
 from typing import Any
 
 import psycopg
 from psycopg.types.json import Json
 
-from app.constants import CATEGORY_WATER, SERVICE_RADIUS_M
+from app.constants import (
+    CATEGORY_HEALTH,
+    CATEGORY_ROAD,
+    CATEGORY_SANITATION,
+    CATEGORY_WATER,
+    SERVICE_RADIUS_M,
+)
 
 # DemandCluster category → InfrastructureFacility.facility_type. Unknown
 # categories fall back to the category string itself (facility registers for
 # future categories are expected to use the category name as the type).
-CATEGORY_FACILITY_TYPES: dict[str, str] = {CATEGORY_WATER: "water_point"}
+CATEGORY_FACILITY_TYPES: dict[str, str] = {
+    CATEGORY_WATER: "water_point",
+    CATEGORY_HEALTH: "health_facility",      # hospitals, PHCs, clinics
+    CATEGORY_ROAD: "road_access_point",      # all-weather road access points
+    CATEGORY_SANITATION: "sanitation_facility",  # drainage, community toilets
+}
+
+# Which facility register scoring counts (enhancements design D6): the
+# synthetic seed by default, so an OpenStreetMap import can never silently
+# change the worked example. SCORING_DATASET=openstreetmap opts in.
+DEFAULT_SCORING_SOURCE = "synthetic"
+
+# SQL predicate on a facility alias `f`; bind scoring_source() to it.
+SCORING_FACILITY_FILTER = (
+    "f.dataset_id IN (SELECT id FROM infrastructure_datasets WHERE source = %s)"
+)
+
+
+def scoring_source() -> str:
+    return (os.environ.get("SCORING_DATASET") or DEFAULT_SCORING_SOURCE).strip().lower()
+
 
 # Strictly > 1 so a zero-coverage cluster is strictly the most severe gap in
 # its category (see module docstring). Presentation-independent: min-max
@@ -131,15 +158,16 @@ def fuse_cluster(conn: psycopg.Connection, cluster_id: str) -> dict[str, Any]:
     # (a) Functioning facilities of the category's type within the service
     # radius of the centroid — geography cast so the radius is in metres.
     facilities = conn.execute(
-        """
+        f"""
         SELECT f.id, f.dataset_id
         FROM infrastructure_facilities f, demand_clusters dc
         WHERE dc.id = %s
           AND f.facility_type = %s
           AND f.functioning
           AND ST_DWithin(f.geom::geography, dc.centroid::geography, %s)
+          AND {SCORING_FACILITY_FILTER}
         """,
-        (cluster_id, ftype, SERVICE_RADIUS_M),
+        (cluster_id, ftype, SERVICE_RADIUS_M, scoring_source()),
     ).fetchall()
     facility_ids = [str(f[0]) for f in facilities]
     facility_count = len(facility_ids)
@@ -161,8 +189,9 @@ def fuse_cluster(conn: psycopg.Connection, cluster_id: str) -> dict[str, Any]:
     if not facility_dataset_ids:
         # Zero facilities in radius: cite the register(s) that were consulted.
         consulted = conn.execute(
-            "SELECT DISTINCT dataset_id FROM infrastructure_facilities WHERE facility_type = %s",
-            (ftype,),
+            f"""SELECT DISTINCT f.dataset_id FROM infrastructure_facilities f
+                WHERE f.facility_type = %s AND {SCORING_FACILITY_FILTER}""",
+            (ftype, scoring_source()),
         ).fetchall()
         facility_dataset_ids = sorted(str(r[0]) for r in consulted)
     citations = [

@@ -164,6 +164,26 @@ def make_cluster(conn, *, category: str = CATEGORY_WATER,
 
 # ----------------------------------------------------------------- cleanup
 
+def _delete_test_trust_flags(conn) -> None:
+    conn.execute(
+        """DELETE FROM location_followups WHERE citizen_request_id IN
+             (SELECT id FROM citizen_requests WHERE submitter_ref LIKE %s)""",
+        (TEST_REF_PREFIX + "%",),
+    )
+    conn.execute(
+        """DELETE FROM trust_flags WHERE citizen_request_id IN
+             (SELECT id FROM citizen_requests WHERE submitter_ref LIKE %s)""",
+        (TEST_REF_PREFIX + "%",),
+    )
+
+
+def _delete_memberless_cluster_flags(conn) -> None:
+    conn.execute(
+        """DELETE FROM trust_flags tf WHERE tf.demand_cluster_id IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM cluster_memberships m
+                             WHERE m.demand_cluster_id = tf.demand_cluster_id)""")
+
+
 def cleanup_test_rows(conn) -> None:
     """Remove every row created by Track A tests and restore seeded state.
 
@@ -175,6 +195,7 @@ def cleanup_test_rows(conn) -> None:
              (SELECT id FROM citizen_requests WHERE submitter_ref LIKE %s)""",
         (TEST_REF_PREFIX + "%",),
     )
+    _delete_test_trust_flags(conn)
     conn.execute(
         """DELETE FROM cluster_memberships WHERE geocoded_request_id IN
              (SELECT gr.id FROM geocoded_requests gr
@@ -207,6 +228,7 @@ def cleanup_test_rows(conn) -> None:
     conn.execute(
         "ALTER TABLE citizen_requests ENABLE TRIGGER citizen_requests_immutable")
     # Drop clusters tests founded (now memberless) and restore member counts.
+    _delete_memberless_cluster_flags(conn)
     conn.execute(
         """DELETE FROM demand_clusters c
            WHERE NOT EXISTS (SELECT 1 FROM cluster_memberships m
@@ -239,6 +261,19 @@ def cleanup_test_state() -> None:
               JOIN structured_requests sr ON sr.id = gr.structured_request_id
               JOIN citizen_requests cr ON cr.id = sr.citizen_request_id
               WHERE cr.submitter_ref LIKE 'test-%')""")
+        _delete_test_trust_flags(conn)
+        _delete_memberless_cluster_flags(conn)
+        # Recommendations drafted by test runs — including on SEEDED clusters a
+        # test request joined (e.g. Velhe) — go too, with their approvals.
+        test_threads = """SELECT thread_id FROM run_traces WHERE citizen_request_id IN
+                          (SELECT id FROM citizen_requests WHERE submitter_ref LIKE 'test-%')
+                          AND thread_id IS NOT NULL"""
+        conn.execute(f"""UPDATE run_traces SET joined_recommendation_id = NULL
+                         WHERE joined_recommendation_id IN
+                           (SELECT id FROM recommendations WHERE thread_id IN ({test_threads}))""")
+        conn.execute(f"""DELETE FROM approvals WHERE recommendation_id IN
+                           (SELECT id FROM recommendations WHERE thread_id IN ({test_threads}))""")
+        conn.execute(f"DELETE FROM recommendations WHERE thread_id IN ({test_threads})")
         # Any cluster left without members (from this or any prior ad-hoc run)
         # goes away entirely, children first.
         for tbl in ("approvals",):
@@ -278,6 +313,12 @@ def cleanup_test_state() -> None:
             "DELETE FROM citizen_requests WHERE submitter_ref LIKE 'test-%'")
         conn.execute(
             "ALTER TABLE citizen_requests ENABLE TRIGGER citizen_requests_immutable")
+        # Member counts must match memberships again before re-scoring, or the
+        # volume indicator would be computed from a stale total.
+        conn.execute(
+            """UPDATE demand_clusters c SET member_count =
+                 (SELECT count(*) FROM cluster_memberships m
+                  WHERE m.demand_cluster_id = c.id)""")
         conn.commit()
         for (cid,) in conn.execute(
             "SELECT id::text FROM demand_clusters WHERE category = %s",
@@ -286,3 +327,25 @@ def cleanup_test_state() -> None:
             fuse_stage.fuse_cluster(conn, cid)
         score_stage.score_category(conn, CATEGORY_WATER)
         conn.commit()
+
+
+# --------------------------------------------------------- reviewer auth
+
+def reviewer_headers() -> dict[str, str]:
+    """Authorization header for the first configured reviewer (REVIEWERS in
+    .env). The token is signed with the same SESSION_SECRET the running
+    backend uses, so it works for in-process and live-server calls alike."""
+    import pytest
+
+    from app import auth
+    names = sorted(auth.reviewers())
+    if not names:
+        pytest.fail("REVIEWERS is not configured in .env — decision endpoints "
+                    "require a reviewer account (see README)")
+    token, _ = auth.issue_token(names[0])
+    return {"Authorization": f"Bearer {token}"}
+
+
+def reviewer_name() -> str:
+    from app import auth
+    return sorted(auth.reviewers())[0]

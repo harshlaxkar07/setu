@@ -22,6 +22,7 @@ import os
 import uuid
 from pathlib import Path
 
+import psycopg
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
@@ -44,6 +45,13 @@ class TextSubmission(BaseModel):
 
     text: str = Field(min_length=1, max_length=4000)
     conversation_id: str = Field(min_length=8, max_length=64)
+    # Assisted field-worker mode (enhancements D11): the village and household
+    # count only — no resident name or phone is ever accepted.
+    assisted: bool = False
+    village: str | None = Field(default=None, min_length=2, max_length=120)
+    households: int | None = Field(default=None, ge=1, le=5000)
+    # Offline-queue replay protection: a repeated key returns the original.
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=64)
 
 
 def _run_fallback(citizen_request_id: str) -> None:
@@ -90,13 +98,17 @@ def _kick_pipeline(citizen_request_id: str) -> None:
 
 def _insert_request(channel: str, conversation_id: str,
                     raw_text: str | None = None,
-                    audio_path: str | None = None) -> str:
+                    audio_path: str | None = None, *,
+                    village: str | None = None, households: int | None = None,
+                    idempotency_key: str | None = None) -> str:
     with db.pool.connection() as conn:
         row = conn.execute(
             """INSERT INTO citizen_requests
-                 (channel, raw_text, audio_path, submitter_ref)
-               VALUES (%s, %s, %s, %s) RETURNING id""",
-            (channel, raw_text, audio_path, conversation_id),
+                 (channel, raw_text, audio_path, submitter_ref,
+                  assisted_village, households_represented, idempotency_key)
+               VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (channel, raw_text, audio_path, conversation_id,
+             village, households, idempotency_key),
         ).fetchone()
         conn.commit()
         return str(row[0])
@@ -127,8 +139,36 @@ async def submit_voice(background_tasks: BackgroundTasks, audio: UploadFile,
 @router.post("/text", status_code=201)
 async def submit_text(body: TextSubmission,
                       background_tasks: BackgroundTasks) -> dict:
-    """Text-fallback submission: persist first, then kick the pipeline."""
-    cr_id = _insert_request("text", body.conversation_id, raw_text=body.text)
+    """Text-fallback submission: persist first, then kick the pipeline.
+
+    Assisted submissions carry a village and household count; any submission
+    may carry an idempotency key, and a repeated key returns the request it
+    first created without creating or processing another (enhancements D11).
+    """
+    if body.assisted and not body.village:
+        raise HTTPException(status_code=422,
+                            detail="assisted reports need the village or ward")
+    if body.idempotency_key:
+        with db.pool.connection() as conn:
+            existing = conn.execute(
+                "SELECT id::text FROM citizen_requests WHERE idempotency_key = %s",
+                (body.idempotency_key,)).fetchone()
+        if existing:
+            return {"id": existing[0], "status": "received", "duplicate": True}
+    try:
+        cr_id = _insert_request(
+            "assisted" if body.assisted else "text", body.conversation_id,
+            raw_text=body.text,
+            village=body.village if body.assisted else None,
+            households=(body.households or 1) if body.assisted else None,
+            idempotency_key=body.idempotency_key)
+    except psycopg.errors.UniqueViolation:
+        # A concurrent flush of the same queued report won the insert.
+        with db.pool.connection() as conn:
+            (cr_id,) = conn.execute(
+                "SELECT id::text FROM citizen_requests WHERE idempotency_key = %s",
+                (body.idempotency_key,)).fetchone()
+        return {"id": cr_id, "status": "received", "duplicate": True}
     background_tasks.add_task(_kick_pipeline, cr_id)
     return {"id": cr_id, "status": "received"}
 
@@ -188,6 +228,11 @@ def request_status(request_id: str) -> dict:
         receipt = {"category": sr[0], "urgency": sr[1], "summary": sr[2],
                    "detected_language": sr[3]}
     payload = {"status": trace[0] if trace else "received", "receipt": receipt}
+    # Location follow-up (enhancements D8): the chat asks once when true.
+    from app import relocate
+    with db.pool.connection() as conn:
+        if relocate.needs_location(conn, request_id):
+            payload["needs_location"] = True
     if prompts:
         payload["verification_prompts"] = [
             {"cluster_id": p[0], "category": p[1], "summary": p[2],
@@ -195,3 +240,46 @@ def request_status(request_id: str) -> dict:
             for p in prompts
         ]
     return payload
+
+
+@router.get("/{request_id}/timeline")
+def request_timeline(request_id: str) -> dict:
+    """Stage-by-stage progress for the citizen (enhancements D11)."""
+    from app import timeline
+    try:
+        uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="unknown request")
+    with db.pool.connection() as conn:
+        out = timeline.build(conn, request_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="unknown request")
+    return out
+
+
+class LocationAnswer(BaseModel):
+    """The citizen's answer to "which village, ward or landmark?"."""
+
+    answer: str = Field(min_length=2, max_length=200)
+    conversation_id: str = Field(min_length=8, max_length=64)
+
+
+@router.post("/{request_id}/location")
+def answer_location(request_id: str, body: LocationAnswer) -> dict:
+    """Attach the follow-up answer to the SAME request and re-locate it
+    (enhancements D8). Only the conversation that submitted it may answer."""
+    from app import relocate
+    try:
+        uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="unknown request")
+    with db.pool.connection() as conn:
+        owner = conn.execute(
+            "SELECT submitter_ref FROM citizen_requests WHERE id = %s",
+            (request_id,)).fetchone()
+    if owner is None or owner[0] != body.conversation_id:
+        raise HTTPException(status_code=404, detail="unknown request")
+    try:
+        return relocate.relocate(request_id, body.answer.strip())
+    except relocate.NotEligible as exc:
+        raise HTTPException(status_code=409, detail=str(exc))

@@ -53,8 +53,11 @@ def traced_stage(conn: psycopg.Connection, trace_id: str, stage: str,
             entry["alternatives"] = [...]      # optional stage-emitted extras
     On exception the entry records the error and re-raises.
     """
+    from app import llm
+
     entry: dict = {"stage": stage, "input_ref": str(input_ref) if input_ref else None}
     start = time.monotonic()
+    collecting = llm.begin_collecting()
     try:
         yield entry
     except Exception as exc:
@@ -62,6 +65,11 @@ def traced_stage(conn: psycopg.Connection, trace_id: str, stage: str,
         raise
     finally:
         entry["duration_ms"] = round((time.monotonic() - start) * 1000, 1)
+        # Provider, model, latency, tokens and masked input of every model call
+        # made inside this stage (enhancements design D13/D16).
+        calls = llm.end_collecting(collecting)
+        if calls:
+            entry["llm_calls"] = calls
         try:
             append_stage(conn, trace_id, entry)
         except psycopg.Error:

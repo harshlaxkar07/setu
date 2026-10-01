@@ -44,10 +44,13 @@ from app.constants import (
     WEIGHT_INVESTMENT_DEFICIT,
     WEIGHT_VOLUME,
 )
+from app.stages import trust as trust_stage
 from app.stages.fuse import (
+    SCORING_FACILITY_FILTER,
     facility_type_for,
     region_for_cluster,
     resolve_zero_facility_gap,
+    scoring_source,
 )
 
 # Indicator names this stage owns (re-scoring replaces exactly these rows and
@@ -109,14 +112,15 @@ def _nearest_source_m(
     of the type, unbounded by the service radius. None when no facility of the
     type exists anywhere in the register."""
     row = conn.execute(
-        """
+        f"""
         SELECT ST_Distance(f.geom::geography, dc.centroid::geography) AS d
         FROM infrastructure_facilities f, demand_clusters dc
         WHERE dc.id = %s AND f.facility_type = %s AND f.functioning
+          AND {SCORING_FACILITY_FILTER}
         ORDER BY d ASC
         LIMIT 1
         """,
-        (cluster_id, facility_type),
+        (cluster_id, facility_type, scoring_source()),
     ).fetchone()
     return float(row[0]) if row else None
 
@@ -180,7 +184,10 @@ def score_category(conn: psycopg.Connection, category: str) -> None:
         cid: INVESTMENT_DEFICIT[regions[cid]["investment_label"]]
         for cid in member_counts
     }
-    raw_volume = {cid: float(member_counts[cid]) for cid in member_counts}
+    # Complaint volume counts only members not excluded by an open/confirmed
+    # trust flag (enhancements D2) — the formula itself is unchanged.
+    counted = {cid: trust_stage.counted_volume(conn, cid) for cid in member_counts}
+    raw_volume = {cid: float(counted[cid]) for cid in member_counts}
 
     # --- min-max normalization within the category ---------------------------
     gap_norm = minmax_normalize(raw_gap)
@@ -244,12 +251,19 @@ def score_category(conn: psycopg.Connection, category: str) -> None:
             [region_citation],
         )
 
+        excluded = member_counts[cid] - counted[cid]
+        volume_text = f"{counted[cid]:,} citizen requests in this cluster"
+        if excluded:
+            volume_text += (f" ({excluded:,} more excluded as suspected "
+                            "manipulation, pending review)")
         _write_indicator(
             conn, cid, INDICATOR_VOLUME,
-            f"{member_counts[cid]:,} citizen requests in this cluster",
-            member_counts[cid],
+            volume_text,
+            counted[cid],
             [{"source": "demand_cluster", "cluster_id": cid,
-              "member_count": member_counts[cid]}],
+              "member_count": member_counts[cid],
+              "counted_volume": counted[cid],
+              "excluded_by_trust_flags": excluded}],
         )
 
         # --- composite score: the locked dominance-by-construction formula ---

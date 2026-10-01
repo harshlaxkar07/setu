@@ -1,14 +1,16 @@
 <!doctype html>
-<!-- Setu citizen chat widget (design D4, tasks 3.1-3.3/3.5/3.8).
-     Static, framework-free, served by FastAPI StaticFiles at /citizen.
-     Bilingual chrome: Hindi (Devanagari, Noto Sans Devanagari) primary,
-     smaller English subtitles. Citizen register per files/07: warm accent,
-     16px radii, >=44px touch targets. NO PII inputs anywhere. -->
+<!-- Setu citizen chat widget (design D4, tasks 3.1-3.3/3.5/3.8; enhancements
+     6.3-6.5). Static, framework-free, served by FastAPI StaticFiles at
+     /citizen. Interface language: Hindi (default), Marathi or English, with
+     English subtitles (i18n.js). Citizen register per files/07: warm accent,
+     16px radii, >=44px touch targets. NO PII inputs anywhere — assisted mode
+     asks only for a village and a household count. -->
 <html lang="hi">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>सेतु — Setu</title>
+  <link rel="icon" type="image/svg+xml" href="/citizen/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -19,11 +21,21 @@
     <header class="header">
       <div class="header-mark" aria-hidden="true">सेतु</div>
       <div class="header-text">
-        <div class="hi">अपनी समस्या बताइए</div>
-        <div class="en">Tell us about your problem</div>
+        <div class="hi" data-i18n='{"key":"header_title","vars":null}'>अपनी समस्या बताइए<span class="en-sub">Tell us about your problem</span></div>
+      </div>
+      <div class="header-side">
+        <div class="lang-switch" role="group" aria-label="भाषा / Language">
+          <button type="button" class="lang-btn" data-lang="hi">हिं</button>
+          <button type="button" class="lang-btn" data-lang="mr">मरा</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+        <div class="anon-pill no-sub" title="We never ask your name or phone number"
+             data-i18n='{"key":"anon","vars":null}'>गुमनाम</div>
       </div>
     </header>
 
+    <!-- Assisted field-worker panel: built by app.js only in ?mode=assisted,
+         so the citizen page itself has exactly one input. -->
     <main id="chat" class="chat" aria-live="polite"></main>
 
     <footer class="composer">
@@ -31,18 +43,15 @@
         अपनी समस्या लिखिए / Type your problem
       </label>
       <input id="text-input" class="text-input" type="text" autocomplete="off"
-             enterkeyhint="send"
-             placeholder="यहाँ लिखिए… / Type here…" />
-      <button id="send-btn" class="send-btn" type="button"
-              aria-label="भेजें / Send">
+             enterkeyhint="send" />
+      <button id="send-btn" class="send-btn" type="button">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round"
              stroke-linejoin="round" aria-hidden="true">
           <path d="M22 2 11 13" /><path d="M22 2 15 22 11 13 2 9z" />
         </svg>
       </button>
-      <button id="mic-btn" class="mic-btn" type="button"
-              aria-label="दबाकर रखें और बोलें / Press and hold to speak">
+      <button id="mic-btn" class="mic-btn" type="button">
         <svg viewBox="0 0 24 24" width="30" height="30" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round"
              stroke-linejoin="round" aria-hidden="true">
@@ -52,12 +61,10 @@
         </svg>
       </button>
     </footer>
-    <div class="mic-hint">
-      <span class="hi">बोलने के लिए माइक दबाकर रखें</span>
-      <span class="en">Press and hold the mic to speak</span>
-    </div>
+    <div class="mic-hint" data-i18n='{"key":"mic_hint","vars":null}'>बोलने के लिए माइक दबाकर रखें<span class="en-sub">Press and hold the mic to speak</span></div>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -52,3 +52,25 @@ def retry(trace_id: str) -> dict:
                    "again (still visible here; retry again after fixing the cause)",
         )
     return {"trace_id": trace_id, "resumed": True}
+
+
+@router.get("/version")
+def data_version() -> dict:
+    """A cheap fingerprint of everything the dashboard shows. The dashboard
+    polls this every few seconds and re-renders only when it changes, so
+    live refresh never disturbs the reviewer's selection or open tab
+    (enhancements design D10)."""
+    with db.pool.connection() as conn:
+        row = conn.execute(
+            """SELECT (SELECT count(*) FROM citizen_requests),
+                      (SELECT count(*) FROM cluster_memberships),
+                      (SELECT count(*) FROM run_traces WHERE status = 'in_progress'),
+                      (SELECT count(*) || ':' || COALESCE(max(created_at)::text, '')
+                       FROM recommendations),
+                      (SELECT count(*) || ':' || count(*) FILTER (WHERE status = 'open')
+                       FROM trust_flags),
+                      (SELECT COALESCE(max(seq), 0) FROM decision_log),
+                      (SELECT count(*) FROM verification_records),
+                      (SELECT COALESCE(max(created_at)::text, '') FROM priority_scores)"""
+        ).fetchone()
+    return {"version": "|".join(str(v) for v in row)}

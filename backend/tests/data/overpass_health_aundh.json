@@ -1,0 +1,257 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-09-30T03:48:04Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 865849506,
+  "lat": 18.5649263,
+  "lon": 73.8022626,
+  "tags": {
+    "addr:city": "Pune",
+    "addr:district": "Pune",
+    "addr:postcode": "411007",
+    "addr:street": "New DP Road",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "healthcare": "hospital",
+    "name": "Sanjeevani Vitalife Medipoint Hospital",
+    "name:en": "Sanjeevani Vitalife Medipoint Hospital",
+    "name:hi": "संजीवनी विटालाईफ मेडिपॉईंट हॉस्पिटल",
+    "name:mr": "संजीवनी विटालाईफ मेडिपॉईंट हॉस्पिटल"
+  }
+},
+{
+  "type": "node",
+  "id": 865854267,
+  "lat": 18.5597445,
+  "lon": 73.8062674,
+  "tags": {
+    "amenity": "hospital",
+    "check_date": "2026-03-10",
+    "healthcare": "hospital",
+    "healthcare:speciality": "general",
+    "name": "LifeLine Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 871515219,
+  "lat": 18.5547291,
+  "lon": 73.8082012,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Dr. Chowdhary"
+  }
+},
+{
+  "type": "node",
+  "id": 871515522,
+  "lat": 18.5554816,
+  "lon": 73.8088556,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Dr. Bonagiri",
+    "name:mr": "डॉ भोणागिरी"
+  }
+},
+{
+  "type": "node",
+  "id": 1065057907,
+  "lat": 18.5424692,
+  "lon": 73.7907426,
+  "tags": {
+    "addr:city": "Pune",
+    "addr:district": "Pune",
+    "addr:full": "111, Mont-Vert Arcade, Above Icici Atm, Pashan-Sus Road",
+    "addr:housenumber": "111, Mont Vert Arcade",
+    "addr:postcode": "411021",
+    "addr:state": "Maharashtra",
+    "addr:street": "Pashan-Sus Road",
+    "amenity": "clinic",
+    "healthcare": "hospital",
+    "healthcare:speciality": "clinic;pathology;pharmacy",
+    "level": "1",
+    "name": "VitaLife Clinic",
+    "opening_hours": "Mo-Sa 07:30-21:00; Su 07:30-12:00",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "phone": "+912066859900",
+    "source": "OpenGovernmentData",
+    "website": "https://vitalife.in/pashan/"
+  }
+},
+{
+  "type": "node",
+  "id": 2973211286,
+  "lat": 18.5576785,
+  "lon": 73.7935963,
+  "tags": {
+    "amenity": "doctors",
+    "healthcare": "doctor",
+    "healthcare:speciality": "paediatrics",
+    "name": "Lotus Paediatrics Clinic",
+    "operator": "Dr. Prachi Deshpande"
+  }
+},
+{
+  "type": "node",
+  "id": 2973218481,
+  "lat": 18.5576203,
+  "lon": 73.7936755,
+  "tags": {
+    "addr:city": "Pune",
+    "addr:district": "HAVELI",
+    "addr:housenumber": "12346",
+    "addr:postcode": "411009",
+    "addr:street": "Gopal Hari Deshmukh Marg",
+    "amenity": "doctors",
+    "healthcare": "doctor",
+    "healthcare:speciality": "general;otolaryngology;allergology;ayurveda",
+    "mobile": "9088778999",
+    "name": "Dr Gupte Hospital",
+    "opening_hours": "Mo-Sa 08:00-18:00",
+    "operator": "Dr. Gupte Hospital",
+    "payment:cash": "yes",
+    "payment:contactless": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 2973466889,
+  "lat": 18.5625409,
+  "lon": 73.8106962,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "healthcare": "hospital",
+    "name": "AIMS Hospital",
+    "opening_hours": "24/7"
+  }
+},
+{
+  "type": "node",
+  "id": 6111132442,
+  "lat": 18.5604582,
+  "lon": 73.8126654,
+  "tags": {
+    "addr:city": "Pune",
+    "addr:district": "Pune",
+    "addr:postcode": "411007",
+    "addr:street": "Sanghvi Kesari Road",
+    "amenity": "clinic",
+    "contact:phone": "+91 992 244 1228;+91 804 806 0114",
+    "email": "rajshreepatil97.rp@gmail.com",
+    "healthcare": "clinic",
+    "healthcare:speciality": "dermatology",
+    "name": "Kimaya Skin Clinic",
+    "name:en": "Kimaya Skin Clinic",
+    "name:hi": "किमया स्कीन क्लिनिक",
+    "name:mr": "किमया स्कीन क्लिनिक",
+    "opening_hours": "Mo-Sa 10:00-19:00",
+    "phone": "+91 992 244 1228;+91 804 806 0114",
+    "website": "https://www.drrajshreepatil.com"
+  }
+},
+{
+  "type": "node",
+  "id": 6111132443,
+  "lat": 18.5604899,
+  "lon": 73.8127794,
+  "tags": {
+    "addr:city": "Pune",
+    "addr:district": "Pune",
+    "addr:postcode": "411007",
+    "addr:street": "Sanghvi Kesari Road",
+    "amenity": "clinic",
+    "contact:phone": "+91 992 244 1228",
+    "healthcare": "clinic",
+    "name": "Modkharkar Clinic",
+    "name:en": "Modkharkar Clinic",
+    "name:hi": "मोडखरकर क्लिनिक",
+    "name:mr": "मोडखरकर क्लिनिक",
+    "phone": "+91 992 244 1228"
+  }
+},
+{
+  "type": "node",
+  "id": 6111212665,
+  "lat": 18.5655305,
+  "lon": 73.8068928,
+  "tags": {
+    "amenity": "clinic",
+    "healthcare": "clinic",
+    "name": "Ashwin Clinic",
+    "name:en": "Ashwin Clinic",
+    "name:hi": "अश्विन क्लिनिक",
+    "name:mr": "अश्विन क्लिनिक"
+  }
+},
+{
+  "type": "node",
+  "id": 6131097713,
+  "lat": 18.5604009,
+  "lon": 73.8086133,
+  "tags": {
+    "amenity": "clinic",
+    "contact:phone": "+91 25883398",
+    "contact:website": "theinamdarheartclinic.in",
+    "healthcare": "clinic",
+    "name": "The Inamdar Heart Clinic",
+    "phone": "+91 25883398",
+    "website": "theinamdarheartclinic.in"
+  }
+},
+{
+  "type": "node",
+  "id": 6199355624,
+  "lat": 18.5547027,
+  "lon": 73.8095145,
+  "tags": {
+    "amenity": "clinic",
+    "name": "Kaya Skin Clinic",
+    "name:mr": "काया स्किन क्लिनिक"
+  }
+},
+{
+  "type": "node",
+  "id": 6901880185,
+  "lat": 18.5711830,
+  "lon": 73.7948972,
+  "tags": {
+    "addr:postcode": "411027",
+    "addr:street": "Pimple Nilakh",
+    "amenity": "hospital",
+    "name:en": "PCMC Hospital",
+    "opening_hours": "Mo-Sa 10:00-17:00"
+  }
+},
+{
+  "type": "node",
+  "id": 7043003792,
+  "lat": 18.5600564,
+  "lon": 73.8072065,
+  "tags": {
+    "addr:district": "Pune",
+    "addr:full": "Plot No.13, Sr No 157, Behind Hotel Polka Dots, Parihar Chowk, Aundh",
+    "addr:postcode": "411007",
+    "addr:state": "Maharashtra",
+    "amenity": "hospital",
+    "check_date": "2026-03-10",
+    "healthcare": "hospital",
+    "name": "Parmar Multi Speciality Hospital and Maternity Home",
+    "source": "OpenGovernmentData"
+  }
+}
+
+  ]
+}

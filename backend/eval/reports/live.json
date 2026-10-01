@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-09-30T09:52:08+00:00",
+  "mode": "live",
+  "provider": "gemini/gemini-3.8-flash",
+  "seconds": 7.2,
+  "requested_items": 56,
+  "complete": false,
+  "summary": {
+    "items": 1,
+    "errors": 1,
+    "overall": {
+      "category": 0.0,
+      "urgency": 0.0,
+      "location": 0.0,
+      "cluster": 0.0
+    },
+    "by_language": {
+      "hi": {
+        "items": 1,
+        "category": 0.0,
+        "urgency": 0.0,
+        "location": 0.0,
+        "cluster": 0.0
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "e001",
+      "language": "hi",
+      "expected": {
+        "category": "water_infrastructure",
+        "urgency": "high",
+        "location": "Velhe",
+        "cluster": "Velhe/water_infrastructure"
+      },
+      "error": "understand: gemini failed twice: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.'",
+      "error_type": "GeminiUnavailable",
+      "correct": {
+        "category": false,
+        "urgency": false,
+        "location": false,
+        "cluster": false
+      }
+    }
+  ]
+}

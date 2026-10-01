@@ -19,10 +19,10 @@ score itself is entirely defined by the locked constants in
 """
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from psycopg.rows import dict_row
 
-from app import db
+from app import audit, auth, db
 
 router = APIRouter(prefix="/api", tags=["clusters"])
 
@@ -49,7 +49,8 @@ SELECT dc.id::text, dc.category, dc.member_count, dc.status::text,
        ST_Y(dc.centroid) AS lat, ST_X(dc.centroid) AS lon,
        ps.score, ps.gap_norm, ps.investment_deficit_norm, ps.volume_norm,
        ps.weights,
-       gs.population, gs.facility_count, gs.gap_value, gs.dataset_citations
+       gs.population, gs.facility_count, gs.gap_value, gs.dataset_citations,
+       tv.excluded, tv.open_request_flags, tc.open_cluster_flags
 FROM demand_clusters dc
 LEFT JOIN LATERAL (
     SELECT * FROM priority_scores
@@ -59,6 +60,23 @@ LEFT JOIN LATERAL (
     SELECT * FROM gap_scores
     WHERE demand_cluster_id = dc.id ORDER BY created_at DESC LIMIT 1
 ) gs ON true
+-- Trust (enhancements D2): members excluded from counted volume, open flags.
+LEFT JOIN LATERAL (
+    SELECT count(DISTINCT sr.citizen_request_id)
+               FILTER (WHERE tf.status IN ('open', 'confirmed')) AS excluded,
+           count(tf.id) FILTER (WHERE tf.status = 'open') AS open_request_flags
+    FROM cluster_memberships cm
+    JOIN geocoded_requests gr ON gr.id = cm.geocoded_request_id
+    JOIN structured_requests sr ON sr.id = gr.structured_request_id
+    JOIN trust_flags tf ON tf.citizen_request_id = sr.citizen_request_id
+         AND tf.rule IN ('duplicate_burst', 'repeat_source')
+    WHERE cm.demand_cluster_id = dc.id
+) tv ON true
+LEFT JOIN LATERAL (
+    SELECT count(*) AS open_cluster_flags FROM trust_flags
+    WHERE demand_cluster_id = dc.id AND citizen_request_id IS NULL
+      AND status = 'open'
+) tc ON true
 """
 
 
@@ -69,6 +87,14 @@ def _cluster_payload(row: dict[str, Any]) -> dict[str, Any]:
         "id": row["id"],
         "category": row["category"],
         "member_count": row["member_count"],
+        # Total members minus those excluded by open/confirmed trust flags —
+        # the volume the PriorityScore actually uses (enhancements D2).
+        "counted_volume": row["member_count"] - int(row["excluded"] or 0),
+        "trust": {
+            "excluded": int(row["excluded"] or 0),
+            "open_request_flags": int(row["open_request_flags"] or 0),
+            "open_cluster_flags": int(row["open_cluster_flags"] or 0),
+        },
         "status": row["status"],
         "confidence": row["confidence"],
         "confidence_reason": row["confidence_reason"],
@@ -146,15 +172,17 @@ def get_cluster(cluster_id: str) -> dict[str, Any]:
         # Raw citizen voices — rendered WITHOUT the AI-drafted marker, in
         # Devanagari where Hindi (policymaker-dashboard provenance scenarios).
         payload["sample_requests"] = [
-            {"raw_text": r["raw_text"], "detected_language": r["detected_language"]}
+            {"raw_text": r["raw_text"], "detected_language": r["detected_language"],
+             "channel": r["channel"], "households": r["households_represented"]}
             for r in cur.execute(
-                """SELECT cr.raw_text, sr.detected_language
+                """SELECT cr.raw_text, sr.detected_language, cr.channel::text AS channel,
+                          cr.households_represented
                    FROM cluster_memberships cm
                    JOIN geocoded_requests gr ON gr.id = cm.geocoded_request_id
                    JOIN structured_requests sr ON sr.id = gr.structured_request_id
                    JOIN citizen_requests cr ON cr.id = sr.citizen_request_id
                    WHERE cm.demand_cluster_id = %s AND cr.raw_text IS NOT NULL
-                   ORDER BY cr.submitted_at LIMIT 3""",
+                   ORDER BY (cr.channel = 'assisted') DESC, cr.submitted_at LIMIT 3""",
                 (cluster_id,),
             ).fetchall()
         ]
@@ -278,7 +306,8 @@ def list_recommendations(
 
 
 @router.post("/clusters/{cluster_id}/resolve")
-def resolve_cluster(cluster_id: str) -> dict[str, Any]:
+def resolve_cluster(cluster_id: str,
+                    reviewer: str = Depends(auth.require_reviewer)) -> dict[str, Any]:
     """Simulated mark-resolved: ``published → resolved_unverified`` only.
 
     Resolution is a *claim pending verification* (verification spec) — the
@@ -289,9 +318,10 @@ def resolve_cluster(cluster_id: str) -> dict[str, Any]:
         # Atomic check-and-transition: no window for a concurrent status change
         # between check and update (review finding).
         updated = conn.execute(
-            """UPDATE demand_clusters SET status = 'resolved_unverified'
+            """UPDATE demand_clusters SET status = 'resolved_unverified',
+                      resolved_at = now(), resolved_by = %s
                WHERE id = %s AND status = 'published' RETURNING id""",
-            (cluster_id,),
+            (reviewer, cluster_id),
         ).fetchone()
         if updated is None:
             current = conn.execute(
@@ -304,5 +334,18 @@ def resolve_cluster(cluster_id: str) -> dict[str, Any]:
                 detail=f"cluster is '{current[0]}' — only a published cluster "
                        "can be marked resolved",
             )
+        audit.append(conn, kind="mark_resolved", subject_id=cluster_id,
+                     decision="resolved_unverified", reviewer=reviewer)
         conn.commit()
     return {"id": cluster_id, "status": "resolved_unverified"}
+
+
+@router.get("/clusters/{cluster_id}/impact")
+def cluster_impact(cluster_id: str) -> dict[str, Any]:
+    """Before/after complaint rate and gap for a resolved cluster (D9)."""
+    from app import impact
+    with db.pool.connection() as conn:
+        out = impact.measure(conn, cluster_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="cluster not found")
+    return out

@@ -33,9 +33,18 @@ services:
       DATABASE_URL: postgresql://setu:setu_local_dev@db:5432/setu
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       DEMO_REPLAY: ${DEMO_REPLAY:-0}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      EMBED_MODEL: ${EMBED_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      SCORING_DATASET: ${SCORING_DATASET:-synthetic}
+      REVIEWERS: ${REVIEWERS:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
       WHISPER_MODEL_DIR: /models
       MEDIA_DIR: /media
       CITIZEN_WEB_DIR: /app/citizen-web
+      MIGRATIONS_DIR: /app/migrations
     volumes:
       # Dev bind-mount: host source is live in the container (restart to reload;
       # `docker compose exec backend pytest` always sees current code).
@@ -50,6 +59,10 @@ services:
       - ./backend/fixtures:/app/fixtures
       # Seed scripts + verified locations (run: docker compose exec backend python /app/seed/seed.py)
       - ./db/seed:/app/seed
+      # Additive schema migrations, applied at backend startup (enhancements D1).
+      - ./db/migrations:/app/migrations:ro
+      # Operator/demo scripts (spam attack, share tunnel helpers) for tests.
+      - ./scripts:/app/scripts:ro
     depends_on:
       db:
         condition: service_healthy
@@ -62,6 +75,9 @@ services:
       # The dashboard talks to the backend API only — deliberately NO database
       # credentials here, so the Publish Gate cannot be bypassed by a direct query.
       BACKEND_URL: http://backend:8000
+    volumes:
+      # Dev bind-mount like the backend: UI edits need a restart, not a rebuild.
+      - ./dashboard:/app
     depends_on:
       db:
         condition: service_healthy

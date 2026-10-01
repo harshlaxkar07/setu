@@ -15,7 +15,13 @@ import pytest
 
 from app import gemini, pipeline
 from app.stages import locate as locate_stage
-from tests.conftest_a import cleanup_test_state, connect, ensure_pool
+from tests.conftest_a import (
+    cleanup_test_state,
+    connect,
+    ensure_pool,
+    reviewer_headers,
+    reviewer_name,
+)
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -54,7 +60,7 @@ def _suspend_one(monkeypatch) -> str:
 
 def test_resume_unknown_thread_is_409_no_state_change():
     r = httpx.post(f"{BACKEND}/api/gate/{uuid.uuid4()}/resume",
-                   json={"decision": "approved", "reviewer": "T"}, timeout=30)
+                   json={"decision": "approved", "reviewer": "T"}, headers=reviewer_headers(), timeout=30)
     assert r.status_code == 409
     with connect() as conn:
         assert conn.execute("SELECT count(*) FROM approvals").fetchone()[0] == \
@@ -66,7 +72,7 @@ def test_cross_process_resume_publishes(monkeypatch):
     thread_id = _suspend_one(monkeypatch)
 
     r = httpx.post(f"{BACKEND}/api/gate/{thread_id}/resume",
-                   json={"decision": "approved", "reviewer": "Cross Process"},
+                   json={"decision": "approved", "reviewer": "Cross Process"}, headers=reviewer_headers(),
                    timeout=60)
     assert r.status_code == 200, r.text
     body = r.json()
@@ -79,11 +85,12 @@ def test_cross_process_resume_publishes(monkeypatch):
             """SELECT decision::text, reviewer FROM approvals a
                JOIN recommendations rec ON rec.id = a.recommendation_id
                WHERE rec.thread_id = %s""", (thread_id,)).fetchone()
-        assert a == ("approved", "Cross Process")
+        # The recorded reviewer is the signed-in account, never body text.
+        assert a == ("approved", reviewer_name())
 
     # Second resume through the server: 409, nothing changes.
     r2 = httpx.post(f"{BACKEND}/api/gate/{thread_id}/resume",
-                    json={"decision": "rejected", "reviewer": "X"}, timeout=30)
+                    json={"decision": "rejected", "reviewer": "X"}, headers=reviewer_headers(), timeout=30)
     assert r2.status_code == 409
 
 
@@ -105,12 +112,12 @@ def test_pending_never_in_published_view_before_approval(monkeypatch):
 
     # Invalid decision string: 422 from the model, no state change.
     bad = httpx.post(f"{BACKEND}/api/gate/{thread_id}/resume",
-                     json={"decision": "sure", "reviewer": "T"}, timeout=30)
+                     json={"decision": "sure", "reviewer": "T"}, headers=reviewer_headers(), timeout=30)
     assert bad.status_code == 422
     assert pipeline.is_suspended_at_gate(thread_id)
 
     httpx.post(f"{BACKEND}/api/gate/{thread_id}/resume",
-               json={"decision": "rejected", "reviewer": "tidy"}, timeout=60)
+               json={"decision": "rejected", "reviewer": "tidy"}, headers=reviewer_headers(), timeout=60)
 
 
 def test_ops_view_lists_every_request(monkeypatch):
@@ -124,4 +131,23 @@ def test_ops_view_lists_every_request(monkeypatch):
     assert len(runs) == total
     assert all(r["status"] for r in runs)
     httpx.post(f"{BACKEND}/api/gate/{thread_id}/resume",
-               json={"decision": "rejected", "reviewer": "tidy"}, timeout=60)
+               json={"decision": "rejected", "reviewer": "tidy"}, headers=reviewer_headers(), timeout=60)
+
+
+def test_decision_without_sign_in_is_401_and_gate_stays_suspended(monkeypatch):
+    """Enhancements task 4.2: the backend rejects unauthenticated decisions."""
+    thread_id = _suspend_one(monkeypatch)
+    for headers in ({}, {"Authorization": "Bearer not-a-token"}):
+        r = httpx.post(f"{BACKEND}/api/gate/{thread_id}/resume",
+                       json={"decision": "approved", "reviewer": "Anyone"},
+                       headers=headers, timeout=30)
+        assert r.status_code == 401
+    assert pipeline.is_suspended_at_gate(thread_id)
+    with connect() as conn:
+        (n,) = conn.execute(
+            """SELECT count(*) FROM approvals a JOIN recommendations r
+                 ON r.id = a.recommendation_id WHERE r.thread_id = %s""",
+            (thread_id,)).fetchone()
+        assert n == 0
+    httpx.post(f"{BACKEND}/api/gate/{thread_id}/resume",
+               json={"decision": "rejected"}, headers=reviewer_headers(), timeout=60)

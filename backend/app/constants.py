@@ -29,6 +29,36 @@ CLUSTER_PROXIMITY_M = 3000
 # Cluster stage: minimum cosine similarity to join an existing cluster.
 CLUSTER_SIMILARITY_THRESHOLD = 0.60
 
+# --- Trust & anti-manipulation (enhancements design D2) --------------------
+# Literal constants like the scoring weights: tuned on the seed + demo script.
+# Duplicate burst: a request is flagged when at least this many OTHER requests
+# in the same cluster, within the window before it, are near-identical to it
+# (same normalised text, or embedding cosine >= TRUST_SIMILARITY).
+TRUST_BURST_WINDOW_S = 600
+TRUST_BURST_MIN_MATCHES = 5
+TRUST_SIMILARITY = 0.97
+# Repeat source: one pseudonymous conversation id joining one cluster more
+# than this many times within the window.
+TRUST_REPEAT_WINDOW_S = 3600
+TRUST_REPEAT_LIMIT = 3
+# Cluster spike: arrivals in the window vs the cluster's own baseline rate.
+TRUST_SPIKE_WINDOW_S = 3600
+TRUST_SPIKE_MIN_ARRIVALS = 20
+TRUST_SPIKE_MULTIPLE = 10.0
+TRUST_BASELINE_DAYS = 30
+
+# --- Equity insights (enhancements design D3) -------------------------------
+# A region is "silent" for a category when its infrastructure gap is at or
+# above this quantile of the category's regions AND it has at most this many
+# citizen requests in that category: high need, little or no digital voice.
+SILENT_GAP_QUANTILE = 0.5
+SILENT_MAX_COMPLAINTS = 5
+
+# --- Impact measurement (enhancements design D9) ----------------------------
+# Complaint arrivals are compared over this many days before vs after the
+# cluster was marked resolved.
+IMPACT_WINDOW_DAYS = 30
+
 # --- Models (design D5/D9, locked) ------------------------------------------
 # D5 originally locked gemini-2.5-flash; the live API retired it for new users
 # (404, 2026-09-26) and names gemini-3.8-flash as the successor.
@@ -42,3 +72,24 @@ WHISPER_MODEL = "small"
 
 # --- Domain -----------------------------------------------------------------
 CATEGORY_WATER = "water_infrastructure"
+CATEGORY_ROAD = "road_infrastructure"
+CATEGORY_HEALTH = "healthcare"
+CATEGORY_OTHER = "other"
+CATEGORY_SANITATION = "sanitation"
+
+# Categories Understand may assign (enhancements design D5). Anything else the
+# model returns is normalised to "other" — never silently invented.
+CATEGORIES = (
+    CATEGORY_WATER,
+    CATEGORY_ROAD,
+    CATEGORY_HEALTH,
+    "electricity",
+    "sanitation",
+    "education",
+    "transportation",
+    "digital_connectivity",
+    CATEGORY_OTHER,
+)
+
+# Categories with facility registers the equity analysis runs over (D3).
+EQUITY_CATEGORIES = (CATEGORY_WATER, CATEGORY_HEALTH, CATEGORY_ROAD)
